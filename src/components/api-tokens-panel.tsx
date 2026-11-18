@@ -14,6 +14,7 @@ type TokenRow = {
   lastUsedAt: Date | null;
   expiresAt: Date | null;
   createdAt: Date;
+  oauth: boolean;
   expired: boolean;
 };
 
@@ -26,6 +27,12 @@ export function ApiTokensPanel({ tokens, mcpUrl }: { tokens: TokenRow[]; mcpUrl:
       <p className="text-sm text-muted">
         Cho AI agent (Claude Code, Claude Desktop, Cursor…) đọc và thêm dữ liệu vào kho qua MCP. Địa chỉ MCP:{" "}
         <code className="rounded bg-surface-2 px-1.5 py-0.5 text-xs text-foreground">{mcpUrl}</code>
+      </p>
+      <p className="rounded-lg bg-surface-2 px-3 py-2 text-sm text-muted">
+        <b className="text-foreground">Claude web / điện thoại:</b> Settings → Connectors → Add custom connector, dán địa chỉ MCP ở
+        trên rồi đăng nhập Google để cho phép — không cần token. Claude Code cũng vậy:{" "}
+        <code className="text-xs text-foreground">claude mcp add --transport http kho-linh-kien {mcpUrl}</code> rồi gõ{" "}
+        <code className="text-xs text-foreground">/mcp</code> để đăng nhập. Kết nối OAuth hiện trong danh sách bên dưới.
       </p>
 
       {state?.ok && state.token && <NewTokenCard token={state.token} mcpUrl={mcpUrl} scope={state.scope!} />}
@@ -74,16 +81,21 @@ export function ApiTokensPanel({ tokens, mcpUrl }: { tokens: TokenRow[]; mcpUrl:
                   <span className={`ml-1 rounded px-1.5 py-0.5 text-[11px] ${t.scope === "write" ? "bg-accent-soft text-accent-strong" : "bg-surface-2 text-muted"}`}>
                     {t.scope === "write" ? "đọc + ghi" : "chỉ đọc"}
                   </span>
+                  {t.oauth && <span className="ml-1 rounded bg-surface-2 px-1.5 py-0.5 text-[11px] text-muted">OAuth</span>}
                   {t.expired && <span className="ml-1 rounded bg-danger/10 px-1.5 py-0.5 text-[11px] text-danger">hết hạn</span>}
                 </p>
                 <p className="text-xs text-muted">
-                  <span className="font-mono">{t.prefix}…</span> · tạo {fmtDateTime(t.createdAt)} ·{" "}
+                  {t.oauth ? "kết nối" : <span className="font-mono">{t.prefix}…</span>} · tạo {fmtDateTime(t.createdAt)} ·{" "}
                   {t.lastUsedAt ? `dùng lần cuối ${fmtDateTime(t.lastUsedAt)}` : "chưa dùng"}
                   {t.expiresAt && !t.expired && ` · hết hạn ${fmtDateTime(t.expiresAt)}`}
                 </p>
               </div>
               <form action={revokeToken.bind(null, t.id)}>
-                <ConfirmButton className="btn-ghost btn-sm hover:text-danger" title="Thu hồi" message={`Thu hồi token "${t.name}"? Agent đang dùng token này sẽ mất quyền truy cập.`}>
+                <ConfirmButton className="btn-ghost btn-sm hover:text-danger" title="Thu hồi" message={
+                    t.oauth
+                      ? `Ngắt kết nối "${t.name}"? Ứng dụng này sẽ phải xin quyền lại.`
+                      : `Thu hồi token "${t.name}"? Agent đang dùng token này sẽ mất quyền truy cập.`
+                  }>
                   <Trash2 className="size-3.5" /> Thu hồi
                 </ConfirmButton>
               </form>

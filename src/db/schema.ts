@@ -83,7 +83,42 @@ export const sessions = pgTable(
 
 export const apiTokenScope = pgEnum("api_token_scope", ["read", "write"]);
 
-/** Token cá nhân cho agent / MCP (Authorization: Bearer inv_…). DB chỉ lưu SHA-256. */
+/**
+ * Client OAuth (Claude web / điện thoại, Claude Code, Cursor…) tự đăng ký qua
+ * Dynamic Client Registration (RFC 7591) tại /api/oauth/register.
+ */
+export const oauthClients = pgTable("oauth_clients", {
+  /** client_id công khai */
+  id: text("id").primaryKey(),
+  /** null = public client (token_endpoint_auth_method "none"), dùng PKCE */
+  clientSecretHash: text("client_secret_hash"),
+  tokenEndpointAuthMethod: text("token_endpoint_auth_method").notNull().default("none"),
+  name: text("name").notNull(),
+  redirectUris: jsonb("redirect_uris").$type<string[]>().notNull(),
+  ...timestamps,
+});
+
+/** Mã uỷ quyền (authorization code) dùng 1 lần, sống 10 phút. DB chỉ lưu SHA-256. */
+export const oauthCodes = pgTable("oauth_codes", {
+  codeHash: text("code_hash").primaryKey(),
+  clientId: text("client_id")
+    .notNull()
+    .references(() => oauthClients.id, { onDelete: "cascade" }),
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  redirectUri: text("redirect_uri").notNull(),
+  codeChallenge: text("code_challenge").notNull(),
+  scope: apiTokenScope("scope").notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  ...timestamps,
+});
+
+/**
+ * Token cá nhân cho agent / MCP (Authorization: Bearer inv_…). DB chỉ lưu SHA-256.
+ * Kết nối OAuth cũng là 1 dòng ở đây (oauth_client_id khác null): access token ngắn hạn
+ * + refresh token, cả hai được xoay vòng mỗi lần refresh. Xoá dòng = thu hồi kết nối.
+ */
 export const apiTokens = pgTable(
   "api_tokens",
   {
@@ -98,6 +133,9 @@ export const apiTokens = pgTable(
     scope: apiTokenScope("scope").notNull().default("write"),
     lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
     expiresAt: timestamp("expires_at", { withTimezone: true }),
+    oauthClientId: text("oauth_client_id").references(() => oauthClients.id, { onDelete: "cascade" }),
+    refreshTokenHash: text("refresh_token_hash").unique(),
+    refreshExpiresAt: timestamp("refresh_expires_at", { withTimezone: true }),
     ...timestamps,
   },
   (t) => [index("api_tokens_user_idx").on(t.userId)],

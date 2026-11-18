@@ -32,9 +32,11 @@ export async function listApiTokens(userId: string) {
       prefix: apiTokens.prefix,
       scope: apiTokens.scope,
       lastUsedAt: apiTokens.lastUsedAt,
-      expiresAt: apiTokens.expiresAt,
+      // Kết nối OAuth: access token chỉ sống 1 giờ và tự gia hạn → hạn thật là hạn của refresh token
+      expiresAt: sql<Date | null>`coalesce(${apiTokens.refreshExpiresAt}, ${apiTokens.expiresAt})`.mapWith(apiTokens.expiresAt),
       createdAt: apiTokens.createdAt,
-      expired: sql<boolean>`${apiTokens.expiresAt} is not null and ${apiTokens.expiresAt} <= now()`,
+      oauth: sql<boolean>`${apiTokens.oauthClientId} is not null`,
+      expired: sql<boolean>`coalesce(${apiTokens.refreshExpiresAt}, ${apiTokens.expiresAt}) <= now()`,
     })
     .from(apiTokens)
     .where(eq(apiTokens.userId, userId))

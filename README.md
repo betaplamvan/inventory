@@ -72,6 +72,18 @@ Mở `http://<ip-máy>:3000`. Dữ liệu nằm trong 2 volume Docker là `pgdat
 
 App có sẵn **MCP server** (Streamable HTTP) tại `<APP_BASE_URL>/api/mcp`. Claude Code, Claude Desktop, Cursor… dùng nó để đọc và thêm dữ liệu vào kho.
 
+### Kết nối bằng OAuth (Claude web / điện thoại, không cần token)
+
+1. Trên claude.ai: **Settings → Connectors → Add custom connector**, dán `https://inventory.nguyenducquan.io.vn/api/mcp`.
+2. Claude mở trang đăng nhập Google của app → chọn quyền (*đọc + ghi* / *chỉ đọc*) → **Cho phép**.
+3. Connector tự có trên app điện thoại cùng tài khoản. Kết nối hiện trong **Tài khoản → API token** (nhãn OAuth), thu hồi ở đó.
+
+Claude Code cũng dùng được OAuth: `claude mcp add --transport http kho-linh-kien https://inventory.nguyenducquan.io.vn/api/mcp` rồi gõ `/mcp` để đăng nhập.
+
+Chi tiết kỹ thuật: theo đặc tả MCP Authorization — metadata ở `/.well-known/oauth-protected-resource` và `/.well-known/oauth-authorization-server`, đăng ký client động `/api/oauth/register`, trang đồng ý `/oauth/authorize` (bắt buộc PKCE S256), token `/api/oauth/token`. Access token sống 1 giờ, refresh token 90 ngày (xoay vòng mỗi lần dùng).
+
+### Kết nối bằng API token
+
 1. Vào **Tài khoản → API token cho AI agent** và tạo token:
    - quyền *đọc + ghi* hoặc *chỉ đọc*;
    - có thời hạn;
