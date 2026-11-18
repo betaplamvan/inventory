@@ -11,7 +11,7 @@ import { InventoryError } from "./mutations";
 
 /**
  * Lưu ảnh / video / tài liệu của mặt hàng lên MinIO + ghi bản ghi media.
- * Dùng chung cho route upload (web + Bearer token) và tool MCP add_item_image.
+ * Dùng chung cho route upload (cookie web, Bearer token, link upload của agent).
  */
 
 /** Lỗi lưu MinIO — route trả 502 thay vì 400 */
@@ -99,23 +99,34 @@ async function makeThumbnail(key: string, buf: Buffer) {
   }
 }
 
-const SHARP_FORMATS: Record<string, { mime: string; ext: string }> = {
-  jpeg: { mime: "image/jpeg", ext: ".jpg" },
-  png: { mime: "image/png", ext: ".png" },
-  webp: { mime: "image/webp", ext: ".webp" },
-  gif: { mime: "image/gif", ext: ".gif" },
-  avif: { mime: "image/avif", ext: ".avif" },
-  heif: { mime: "image/heic", ext: ".heic" },
-  tiff: { mime: "image/tiff", ext: ".tiff" },
+const MIME_BY_EXT: Record<string, string> = {
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".png": "image/png",
+  ".webp": "image/webp",
+  ".gif": "image/gif",
+  ".avif": "image/avif",
+  ".heic": "image/heic",
+  ".heif": "image/heif",
+  ".bmp": "image/bmp",
+  ".tif": "image/tiff",
+  ".tiff": "image/tiff",
+  ".svg": "image/svg+xml",
+  ".mp4": "video/mp4",
+  ".mov": "video/quicktime",
+  ".webm": "video/webm",
+  ".mkv": "video/x-matroska",
+  ".pdf": "application/pdf",
+  ".zip": "application/zip",
+  ".txt": "text/plain",
 };
 
-/** Nhận diện ảnh từ nội dung (không tin mimeType client gửi). Trả về null nếu không phải ảnh. */
-export async function sniffImage(buf: Buffer) {
-  try {
-    const meta = await sharp(buf).metadata();
-    const f = meta.format && SHARP_FORMATS[meta.format];
-    return f ? { ...f, width: meta.width, height: meta.height } : null;
-  } catch {
-    return null;
-  }
+/** Header thường gặp khi client không biết loại file (vd. curl --data-binary mặc định gửi form-urlencoded) */
+const GENERIC_TYPES = new Set(["", "application/octet-stream", "application/x-www-form-urlencoded", "multipart/form-data"]);
+
+/** Loại file: dùng Content-Type nếu cụ thể, không thì đoán theo đuôi tên file. */
+export function resolveContentType(header: string | null, filename: string) {
+  const ct = (header ?? "").split(";")[0].trim().toLowerCase();
+  if (!GENERIC_TYPES.has(ct)) return ct;
+  return MIME_BY_EXT[path.extname(filename).toLowerCase()] ?? "application/octet-stream";
 }

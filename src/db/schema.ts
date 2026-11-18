@@ -105,6 +105,31 @@ export const apiTokens = pgTable(
 
 export type ApiToken = typeof apiTokens.$inferSelect;
 
+/**
+ * Link upload ngắn hạn cho agent (tạo bằng tool MCP create_upload_url): chỉ upload vào 1 mặt hàng,
+ * giới hạn số file và thời gian. URL chứa token ngẫu nhiên, DB chỉ lưu SHA-256.
+ * Thu hồi API token → link tạo từ token đó mất hiệu lực theo (cascade).
+ */
+export const uploadLinks = pgTable(
+  "upload_links",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tokenHash: text("token_hash").notNull().unique(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    itemId: integer("item_id")
+      .notNull()
+      .references((): AnyPgColumn => items.id, { onDelete: "cascade" }),
+    apiTokenId: uuid("api_token_id").references(() => apiTokens.id, { onDelete: "cascade" }),
+    maxUploads: integer("max_uploads").notNull(),
+    uploads: integer("uploads").notNull().default(0),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    ...timestamps,
+  },
+  (t) => [index("upload_links_user_idx").on(t.userId)],
+);
+
 /** Chủ sở hữu dữ liệu kho. Nullable chỉ để giữ dữ liệu tạo trước khi có tài khoản
  *  (được gán cho tài khoản đầu tiên đăng nhập). */
 const owner = () => uuid("user_id").references(() => users.id, { onDelete: "cascade" });

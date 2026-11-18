@@ -22,7 +22,7 @@ export async function POST(req: Request) {
     );
   }
 
-  const server = buildMcpServer({ userId: auth.userId, scope: auth.scope });
+  const server = buildMcpServer({ userId: auth.userId, scope: auth.scope, tokenId: auth.tokenId });
   const transport = new WebStandardStreamableHTTPServerTransport({
     sessionIdGenerator: undefined, // stateless
     enableJsonResponse: true,

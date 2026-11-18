@@ -25,6 +25,6 @@ export function proxy(request: NextRequest) {
 
 export const config = {
   // Bỏ qua file tĩnh, /api/media và /api/mcp: các route này tự xác thực (cookie / Bearer token),
-  // và proxy chỉ buffer body tối đa 10MB rồi cắt ngang → hỏng upload video / ảnh base64 qua MCP.
+  // và proxy chỉ buffer body tối đa 10MB rồi cắt ngang → hỏng upload file lớn.
   matcher: ["/((?!_next/static|_next/image|favicon.ico|api/media|api/mcp).*)"],
 };

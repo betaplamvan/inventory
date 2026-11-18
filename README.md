@@ -93,22 +93,25 @@ App có sẵn **MCP server** (Streamable HTTP) tại `<APP_BASE_URL>/api/mcp`. C
 | `create_item`, `update_item` | Thêm / sửa mặt hàng. Danh mục và vị trí truyền bằng tên, ví dụ `"Tụ điện > Tụ gốm"`; `createMissing` để tự tạo |
 | `record_movement` | Nhập / xuất / kiểm kê, có ghi lịch sử, không cho xuất quá số đang có |
 | `create_category`, `create_location` | Tạo danh mục / vị trí |
-| `add_item_image` | Gắn ảnh (base64, tối đa 8MB) vào mặt hàng; ảnh đầu tiên thành ảnh đại diện, `setCover` để đổi |
+| `create_upload_url` | Xin link upload ngắn hạn cho 1 mặt hàng; agent `curl` file thẳng lên (xem dưới) |
 
 Không có tool xoá: xoá chỉ làm được trên giao diện web. Token *chỉ đọc* bị chặn mọi tool ghi.
 
-### Upload file trực tiếp bằng API token
+### Gắn ảnh / file
 
-Agent chạy được shell (Claude Code…) hoặc script nên upload thẳng file thay vì gửi base64 qua MCP: nhanh hơn, đỡ tốn token, và nhận cả video / PDF. Cần token quyền *đọc + ghi*:
+Nội dung file **không** đi qua MCP (model phải chép lại từng ký tự base64, rất tốn token). Thay vào đó agent gọi `create_upload_url` để lấy link upload rồi POST file thẳng lên:
 
 ```bash
-curl -X POST "https://inventory.nguyenducquan.io.vn/api/media/upload?itemId=1&filename=hop-nhua.jpg" \
-  -H "Authorization: Bearer inv_…" \
-  -H "Content-Type: image/jpeg" \
+curl -sS -X POST "https://inventory.nguyenducquan.io.vn/api/media/upload?t=up_…&filename=hop-nhua.jpg" \
   --data-binary @photos/hop-nhua.jpg
 ```
 
-Thêm `&cover=1` để đặt làm ảnh đại diện.
+- Link chỉ upload được vào đúng 1 mặt hàng, mặc định hết hạn sau 15 phút (tối đa 60) và nhận tối đa 10 file (tối đa 50).
+- Thu hồi API token thì link tạo từ token đó cũng mất hiệu lực.
+- Loại file đoán theo đuôi `filename` nếu không gửi `Content-Type`. Nhận ảnh, video, PDF.
+- Ảnh đầu tiên tự thành ảnh đại diện; thêm `&cover=1` để đổi.
+
+Script cũng có thể upload bằng API token quyền ghi: `POST /api/media/upload?itemId=<id>&filename=<tên>` kèm header `Authorization: Bearer inv_…`.
 
 ## CI/CD
 

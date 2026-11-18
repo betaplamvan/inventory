@@ -32,13 +32,10 @@ import {
   type SortKey,
   type StockFilter,
 } from "@/lib/queries";
-import { addItemMediaFor, sniffImage } from "@/lib/inventory/media";
+import { UPLOAD_LINK_MAX_FILES, UPLOAD_LINK_MAX_MINUTES, createUploadLink } from "@/lib/inventory/upload-links";
 import { getObject } from "@/lib/storage";
 
-export type McpAuth = { userId: string; scope: TokenScope };
-
-/** Giới hạn ảnh gửi qua MCP (base64 nằm trong JSON-RPC nên giữ nhỏ; file lớn dùng /api/media/upload) */
-const MCP_IMAGE_MAX_MB = 8;
+export type McpAuth = { userId: string; scope: TokenScope; tokenId?: string };
 
 const json = (data: unknown): CallToolResult => ({
   content: [{ type: "text", text: JSON.stringify(data, null, 2) }],
@@ -217,7 +214,7 @@ export function buildMcpServer(auth: McpAuth) {
         "Tìm trước bằng search_items để tránh tạo trùng. Thay đổi số lượng bằng record_movement " +
         "(in = nhập thêm, out = lấy ra dùng, adjust = đặt số lượng thực tế khi kiểm kê) để có lịch sử. " +
         "Tiền tệ là VNĐ. Danh mục / vị trí có thể truyền bằng tên, ví dụ \"Tụ điện > Tụ gốm\". " +
-        "Gắn ảnh bằng add_item_image, hoặc POST file thẳng lên /api/media/upload với cùng API token nếu chạy được shell.",
+        "Gắn ảnh / file: gọi create_upload_url lấy link rồi POST file thẳng lên bằng curl (file không đi qua model).",
     },
   );
 
@@ -603,55 +600,52 @@ export function buildMcpServer(auth: McpAuth) {
   );
 
   server.registerTool(
-    "add_item_image",
+    "create_upload_url",
     {
-      title: "Thêm ảnh cho mặt hàng",
+      title: "Xin link upload ảnh / file",
       description:
-        `Gắn 1 ảnh (JPEG/PNG/WebP/GIF/HEIC/AVIF, tối đa ${MCP_IMAGE_MAX_MB}MB) vào mặt hàng, truyền nội dung dạng base64. ` +
-        "Ảnh đầu tiên tự thành ảnh đại diện; setCover=true để đổi ảnh đại diện. " +
-        "Nếu agent chạy được lệnh shell thì nên upload thẳng file qua HTTP cho nhanh và đỡ tốn token, dùng cùng API token: " +
-        `curl -X POST "${appBaseUrl()}/api/media/upload?itemId=<id>&filename=<tên file>" ` +
-        '-H "Authorization: Bearer <token>" -H "Content-Type: image/jpeg" --data-binary @<đường dẫn file>  ' +
-        "(thêm &cover=1 để đặt làm ảnh đại diện; cách này nhận cả video, PDF).",
+        "Tạo link upload ngắn hạn cho 1 mặt hàng để gắn ảnh / video / PDF. Agent POST nội dung file thẳng lên link bằng " +
+        "lệnh shell (curl), nên file không đi qua model (không tốn token) và không cần API token. " +
+        "Một link dùng được cho nhiều file tới khi hết hạn hoặc hết lượt. Mỗi file 1 lệnh: " +
+        'curl -sS -X POST "<uploadUrl>&filename=<tên file có đuôi>" --data-binary @"<đường dẫn file>"  ' +
+        "(loại file đoán theo đuôi tên file; thêm &cover=1 để đặt làm ảnh đại diện — ảnh đầu tiên tự thành ảnh đại diện).",
       inputSchema: {
         id: z.number().int().positive().optional().describe("id mặt hàng"),
         sku: z.string().optional(),
-        data: z
-          .string()
+        minutes: z
+          .number()
+          .int()
           .min(1)
-          .max(Math.ceil((MCP_IMAGE_MAX_MB * 1024 * 1024 * 4) / 3) + 100)
-          .describe('Nội dung ảnh dạng base64 (chấp nhận cả data URL "data:image/jpeg;base64,…")'),
-        filename: z.string().max(255).optional().describe("Tên file, ví dụ ic-555.jpg"),
-        setCover: z.boolean().optional().describe("true → đặt làm ảnh đại diện"),
+          .max(UPLOAD_LINK_MAX_MINUTES)
+          .optional()
+          .describe(`Thời hạn link (phút), mặc định 15, tối đa ${UPLOAD_LINK_MAX_MINUTES}`),
+        maxFiles: z
+          .number()
+          .int()
+          .min(1)
+          .max(UPLOAD_LINK_MAX_FILES)
+          .optional()
+          .describe(`Số file tối đa upload qua link, mặc định 10, tối đa ${UPLOAD_LINK_MAX_FILES}`),
       },
       annotations: writeHint,
     },
-    run(true, async (a: { id?: number; sku?: string; data: string; filename?: string; setCover?: boolean }) => {
+    run(true, async (a: { id?: number; sku?: string; minutes?: number; maxFiles?: number }) => {
       const id = await findItemId(auth.userId, a);
-      const b64 = a.data.replace(/^data:[^;,]*;base64,/, "").replace(/\s+/g, "");
-      if (!/^[A-Za-z0-9+/_-]*={0,2}$/.test(b64)) return fail("data không phải base64 hợp lệ");
-      const buf = Buffer.from(b64, "base64");
-      if (!buf.length) return fail("Ảnh rỗng");
-      if (buf.length > MCP_IMAGE_MAX_MB * 1024 * 1024) return fail(`Ảnh vượt quá ${MCP_IMAGE_MAX_MB}MB`);
-      const img = await sniffImage(buf);
-      if (!img) return fail("Không nhận diện được ảnh (hỗ trợ JPEG, PNG, WebP, GIF, HEIC, AVIF, TIFF)");
-
-      const base = (a.filename?.trim() || `anh-${id}`).replace(/\.[a-z0-9]{1,5}$/i, "");
-      const m = await addItemMediaFor(auth.userId, id, {
-        body: buf,
-        filename: base + img.ext,
-        contentType: img.mime,
-        setCover: a.setCover,
-      });
-      const it = await getItem(id);
-      return json({
-        added: true,
+      const link = await createUploadLink({
+        userId: auth.userId,
         itemId: id,
-        name: it?.name,
-        media: { id: m.id, filename: m.filename, contentType: m.contentType, size: m.size, width: img.width, height: img.height },
-        isCover: it?.coverMediaId === m.id,
-        imageCount: it?.media.filter((x) => x.kind === "image").length,
-        url: itemUrl(id),
+        apiTokenId: auth.tokenId,
+        minutes: a.minutes ?? 15,
+        maxUploads: a.maxFiles ?? 10,
+      });
+      return json({
+        itemId: id,
+        name: link.item.name,
+        uploadUrl: link.url,
+        expiresAt: link.expiresAt,
+        maxFiles: link.maxUploads,
+        example: `curl -sS -X POST "${link.url}&filename=anh-1.jpg" --data-binary @"/duong/dan/anh-1.jpg"`,
+        itemUrl: itemUrl(id),
       });
     }),
   );
