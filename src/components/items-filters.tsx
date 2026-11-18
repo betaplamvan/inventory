@@ -1,0 +1,146 @@
+"use client";
+
+import Form from "next/form";
+import { useRef } from "react";
+import { LayoutGrid, List, Search, X } from "lucide-react";
+import Link from "next/link";
+import { ITEM_KINDS, KIND_LABELS } from "@/lib/constants";
+
+type Opt = { id: number; path: string; depth: number };
+
+export type FilterValues = {
+  q?: string;
+  kind?: string;
+  category?: string;
+  location?: string;
+  stock?: string;
+  sort?: string;
+  view?: string;
+};
+
+export function ItemsFilters({
+  values,
+  categories,
+  locations,
+}: {
+  values: FilterValues;
+  categories: Opt[];
+  locations: Opt[];
+}) {
+  const formRef = useRef<HTMLFormElement>(null);
+  const submit = () => formRef.current?.requestSubmit();
+  const hasFilter = !!(values.q || values.kind || values.category || values.location || values.stock);
+  const view = values.view === "grid" ? "grid" : "list";
+
+  return (
+    <Form ref={formRef} action="/items" className="card mb-4 space-y-3 p-3">
+      <input type="hidden" name="view" value={view === "grid" ? "grid" : ""} />
+      <div className="flex gap-2">
+        <div className="relative flex-1">
+          <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted" />
+          <input
+            name="q"
+            defaultValue={values.q}
+            key={values.q ?? ""}
+            placeholder="Tìm theo tên, mã, MPN, package, tag… (gõ không dấu cũng được)"
+            className="input pl-9"
+            type="search"
+          />
+        </div>
+        <button type="submit" className="btn-primary">
+          Tìm
+        </button>
+      </div>
+      <div className="grid grid-cols-2 gap-2 md:grid-cols-5">
+        <select name="kind" defaultValue={values.kind ?? ""} onChange={submit} className="input" key={`k${values.kind}`}>
+          <option value="">Tất cả loại</option>
+          {ITEM_KINDS.map((k) => (
+            <option key={k} value={k}>
+              {KIND_LABELS[k]}
+            </option>
+          ))}
+        </select>
+        <select
+          name="category"
+          defaultValue={values.category ?? ""}
+          onChange={submit}
+          className="input"
+          key={`c${values.category}`}
+        >
+          <option value="">Tất cả danh mục</option>
+          {categories.map((c) => (
+            <option key={c.id} value={c.id}>
+              {"  ".repeat(c.depth)}
+              {c.path.split(" › ").pop()}
+            </option>
+          ))}
+        </select>
+        <select
+          name="location"
+          defaultValue={values.location ?? ""}
+          onChange={submit}
+          className="input"
+          key={`l${values.location}`}
+        >
+          <option value="">Mọi vị trí</option>
+          {locations.map((l) => (
+            <option key={l.id} value={l.id}>
+              {"  ".repeat(l.depth)}
+              {l.path.split(" › ").pop()}
+            </option>
+          ))}
+        </select>
+        <select name="stock" defaultValue={values.stock ?? ""} onChange={submit} className="input" key={`s${values.stock}`}>
+          <option value="">Mọi tình trạng</option>
+          <option value="in">Còn hàng</option>
+          <option value="low">Cần mua thêm</option>
+          <option value="out">Hết hàng</option>
+        </select>
+        <select
+          name="sort"
+          defaultValue={values.sort ?? ""}
+          onChange={submit}
+          className="input col-span-2 md:col-span-1"
+          key={`o${values.sort}`}
+        >
+          <option value="">Mới cập nhật</option>
+          <option value="created">Mới thêm</option>
+          <option value="name">Tên A → Z</option>
+          <option value="qty">Số lượng ít nhất</option>
+          <option value="value">Giá trị cao nhất</option>
+        </select>
+      </div>
+      <div className="flex items-center justify-between">
+        {hasFilter ? (
+          <Link href={view === "grid" ? "/items?view=grid" : "/items"} className="btn-ghost btn-sm">
+            <X className="size-3.5" /> Xoá bộ lọc
+          </Link>
+        ) : (
+          <span />
+        )}
+        <div className="flex rounded-lg border border-border p-0.5">
+          <ViewLink values={values} view="list" active={view === "list"} />
+          <ViewLink values={values} view="grid" active={view === "grid"} />
+        </div>
+      </div>
+    </Form>
+  );
+}
+
+function ViewLink({ values, view, active }: { values: FilterValues; view: "list" | "grid"; active: boolean }) {
+  const sp = new URLSearchParams();
+  for (const [k, v] of Object.entries({ ...values, view: view === "grid" ? "grid" : "" })) {
+    if (v) sp.set(k, v);
+  }
+  const s = sp.toString();
+  const Icon = view === "grid" ? LayoutGrid : List;
+  return (
+    <Link
+      href={`/items${s ? `?${s}` : ""}`}
+      aria-label={view === "grid" ? "Dạng lưới" : "Dạng danh sách"}
+      className={`rounded-md p-1.5 ${active ? "bg-surface-2 text-foreground" : "text-muted hover:text-foreground"}`}
+    >
+      <Icon className="size-4" />
+    </Link>
+  );
+}
