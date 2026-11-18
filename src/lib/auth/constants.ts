@@ -5,7 +5,8 @@ export const SESSION_DAYS = 30;
 export const SESSION_MAX_AGE = SESSION_DAYS * 24 * 60 * 60;
 
 /** Đường dẫn không cần đăng nhập */
-export const PUBLIC_PATHS = ["/login", "/api/auth", "/api/health"];
+// /api/mcp tự xác thực bằng Bearer token (không dùng cookie)
+export const PUBLIC_PATHS = ["/login", "/api/auth", "/api/health", "/api/mcp"];
 
 export function sessionCookieOptions() {
   return {

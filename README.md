@@ -68,6 +68,34 @@ docker compose --profile app up -d --build
 
 Mở `http://<ip-máy>:3000`. Dữ liệu nằm trong 2 volume Docker là `pgdata` và `miniodata`.
 
+## MCP cho AI agent
+
+App có sẵn **MCP server** (Streamable HTTP) tại `<APP_BASE_URL>/api/mcp`. Claude Code, Claude Desktop, Cursor… dùng nó để đọc và thêm dữ liệu vào kho.
+
+1. Vào **Tài khoản → API token cho AI agent** và tạo token:
+   - quyền *đọc + ghi* hoặc *chỉ đọc*;
+   - có thời hạn;
+   - token chỉ hiện một lần;
+   - mỗi token chỉ thấy kho của người tạo.
+2. Chép lệnh cấu hình hiện ngay dưới token. Với Claude Code:
+
+   ```bash
+   claude mcp add --transport http kho-linh-kien https://inventory.nguyenducquan.io.vn/api/mcp      --header "Authorization: Bearer inv_…"
+   ```
+
+| Tool | Việc |
+|---|---|
+| `inventory_overview` | Tổng quan: số mặt hàng, giá trị kho, cần mua thêm, giao dịch gần đây |
+| `search_items` | Tìm / lọc mặt hàng (không phân biệt dấu), theo danh mục, vị trí, loại, tình trạng |
+| `get_item` | Chi tiết mặt hàng, thông số, link, ảnh/tài liệu, lịch sử |
+| `get_item_images` | Trả ảnh (thumbnail) để agent xem trực tiếp |
+| `list_categories`, `list_locations`, `list_movements` | Cây danh mục / vị trí, lịch sử nhập xuất |
+| `create_item`, `update_item` | Thêm / sửa mặt hàng. Danh mục và vị trí truyền bằng tên, ví dụ `"Tụ điện > Tụ gốm"`; `createMissing` để tự tạo |
+| `record_movement` | Nhập / xuất / kiểm kê, có ghi lịch sử, không cho xuất quá số đang có |
+| `create_category`, `create_location` | Tạo danh mục / vị trí |
+
+Không có tool xoá: xoá chỉ làm được trên giao diện web. Token *chỉ đọc* bị chặn mọi tool ghi.
+
 ## CI/CD
 
 Push lên `main` sẽ build image (GHCR) rồi tự deploy lên **minisforum** qua GitHub Actions, theo mô hình của okia.
@@ -104,6 +132,9 @@ src/
   lib/storage.ts      MinIO client
   lib/auth/           Google OAuth (PKCE + JWKS), phiên đăng nhập, liên kết tài khoản
   app/api/auth/       /google (bắt đầu), /google/callback, /dev-login
+  app/api/mcp/        MCP server (Streamable HTTP, Bearer token)
+  lib/mcp/server.ts   định nghĩa các tool MCP
+  lib/inventory/      nghiệp vụ ghi dữ liệu dùng chung cho web và MCP
   proxy.ts            chuyển về /login khi chưa có cookie phiên
 drizzle/              file migration SQL
 scripts/seed.ts       dữ liệu mẫu

@@ -5,6 +5,7 @@ import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { categories, locations } from "@/db/schema";
 import { requireUser } from "@/lib/auth/session";
+import { parentProblem } from "@/lib/inventory/mutations";
 import type { ActionResult } from "./items";
 
 type Table = typeof categories | typeof locations;
@@ -15,25 +16,6 @@ function readCommon(fd: FormData) {
   const parentId = Number.isInteger(parentRaw) && parentRaw > 0 ? parentRaw : null;
   const description = String(fd.get("description") ?? "").trim() || null;
   return { name, parentId, description };
-}
-
-/** Kiểm tra mục cha thuộc user và không tạo vòng lặp cha-con */
-async function parentProblem(table: Table, userId: string, id: number | null, parentId: number | null) {
-  if (parentId == null) return null;
-  const rows = await db
-    .select({ id: table.id, parentId: table.parentId })
-    .from(table)
-    .where(eq(table.userId, userId));
-  const parentOf = new Map(rows.map((r) => [r.id, r.parentId]));
-  if (!parentOf.has(parentId)) return "Mục cha không hợp lệ";
-  if (id == null) return null;
-  let cur: number | null | undefined = parentId;
-  let guard = 0;
-  while (cur != null && guard++ < 100) {
-    if (cur === id) return "Không thể chọn chính nó hoặc mục con làm mục cha";
-    cur = parentOf.get(cur);
-  }
-  return null;
 }
 
 async function save(table: Table, id: number | null, fd: FormData): Promise<ActionResult> {

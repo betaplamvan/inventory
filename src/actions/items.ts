@@ -3,10 +3,11 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { and, eq, ne } from "drizzle-orm";
-import { db, type Tx } from "@/db";
-import { categories, items, locations, media, stockMovements, type MovementType } from "@/db/schema";
+import { db } from "@/db";
+import { items, media, stockMovements, type MovementType } from "@/db/schema";
 import { requireUser } from "@/lib/auth/session";
-import { buildSearchText, fieldErrors, itemFromFormData, parseNum, type ItemInput } from "@/lib/item-input";
+import { buildSearchText, fieldErrors, itemFromFormData, parseNum } from "@/lib/item-input";
+import { createItemFor, pgErrorMessage, recordMovementFor, updateItemFor } from "@/lib/inventory/mutations";
 import { removeObjects } from "@/lib/storage";
 
 export type ActionResult =
@@ -17,37 +18,10 @@ function revalidateAll() {
   revalidatePath("/", "layout");
 }
 
-function pgErrorMessage(err: unknown): string {
-  const e = err as { code?: string; cause?: { code?: string } };
-  const code = e?.code ?? e?.cause?.code;
-  if (code === "23505") return "Mã SKU đã tồn tại, vui lòng chọn mã khác";
-  console.error(err);
-  return "Có lỗi xảy ra, vui lòng thử lại";
-}
-
-const round3 = (n: number) => Math.round(n * 1000) / 1000;
-
-/** Bỏ danh mục / vị trí không thuộc user (chống gửi id của người khác). */
-async function ownedRefs(userId: string, data: Pick<ItemInput, "categoryId" | "locationId">) {
-  const [cat] = data.categoryId
-    ? await db
-        .select({ id: categories.id })
-        .from(categories)
-        .where(and(eq(categories.id, data.categoryId), eq(categories.userId, userId)))
-    : [];
-  const [loc] = data.locationId
-    ? await db
-        .select({ id: locations.id })
-        .from(locations)
-        .where(and(eq(locations.id, data.locationId), eq(locations.userId, userId)))
-    : [];
-  return { categoryId: cat?.id ?? null, locationId: loc?.id ?? null };
-}
-
 /** id mặt hàng nếu thuộc user, ngược lại null */
-async function ownedItemId(userId: string, itemId: number, tx: Tx | typeof db = db) {
+async function ownedItemId(userId: string, itemId: number) {
   if (!Number.isInteger(itemId)) return null;
-  const [row] = await tx
+  const [row] = await db
     .select({ id: items.id })
     .from(items)
     .where(and(eq(items.id, itemId), eq(items.userId, userId)));
@@ -62,30 +36,8 @@ export async function createItem(formData: FormData): Promise<ActionResult> {
   if (!parsed.success) {
     return { ok: false, error: "Dữ liệu chưa hợp lệ", fieldErrors: fieldErrors(parsed.error) };
   }
-  const data = { ...parsed.data, ...(await ownedRefs(me.id, parsed.data)) };
   try {
-    const id = await db.transaction(async (tx) => {
-      const [row] = await tx
-        .insert(items)
-        .values({
-          ...data,
-          userId: me.id,
-          kind: data.kind as never,
-          searchText: buildSearchText(data),
-        })
-        .returning({ id: items.id });
-      if (data.quantity > 0) {
-        await tx.insert(stockMovements).values({
-          itemId: row.id,
-          type: "in",
-          delta: data.quantity,
-          balanceAfter: data.quantity,
-          unitPrice: data.unitPrice,
-          note: "Tồn kho ban đầu",
-        });
-      }
-      return row.id;
-    });
+    const id = await createItemFor(me.id, parsed.data);
     revalidateAll();
     return { ok: true, id };
   } catch (err) {
@@ -99,43 +51,11 @@ export async function updateItem(id: number, formData: FormData): Promise<Action
   if (!parsed.success) {
     return { ok: false, error: "Dữ liệu chưa hợp lệ", fieldErrors: fieldErrors(parsed.error) };
   }
-  const data = { ...parsed.data, ...(await ownedRefs(me.id, parsed.data)) };
   try {
-    await db.transaction(async (tx) => {
-      const [current] = await tx
-        .select({ quantity: items.quantity })
-        .from(items)
-        .where(and(eq(items.id, id), eq(items.userId, me.id)))
-        .for("update");
-      if (!current) throw new Error("NOT_FOUND");
-
-      await tx
-        .update(items)
-        .set({
-          ...data,
-          kind: data.kind as never,
-          searchText: buildSearchText(data),
-          updatedAt: new Date(),
-        })
-        .where(and(eq(items.id, id), eq(items.userId, me.id)));
-
-      const delta = round3(data.quantity - current.quantity);
-      if (delta !== 0) {
-        await tx.insert(stockMovements).values({
-          itemId: id,
-          type: "adjust",
-          delta,
-          balanceAfter: data.quantity,
-          note: "Sửa trực tiếp trong form",
-        });
-      }
-    });
+    await updateItemFor(me.id, id, parsed.data);
     revalidateAll();
     return { ok: true, id };
   } catch (err) {
-    if (err instanceof Error && err.message === "NOT_FOUND") {
-      return { ok: false, error: "Không tìm thấy mặt hàng" };
-    }
     return { ok: false, error: pgErrorMessage(err) };
   }
 }
@@ -176,54 +96,6 @@ export async function duplicateItem(id: number) {
 
 /* ---------------- Nhập / xuất / kiểm kê ---------------- */
 
-async function applyMovement(
-  tx: Tx,
-  userId: string,
-  itemId: number,
-  type: MovementType,
-  amount: number,
-  extra: { note?: string | null; reference?: string | null; unitPrice?: number | null } = {},
-) {
-  const [current] = await tx
-    .select({ quantity: items.quantity })
-    .from(items)
-    .where(and(eq(items.id, itemId), eq(items.userId, userId)))
-    .for("update");
-  if (!current) throw new Error("Không tìm thấy mặt hàng");
-
-  let delta: number;
-  if (type === "in") delta = Math.abs(amount);
-  else if (type === "out") delta = -Math.abs(amount);
-  else delta = amount - current.quantity; // kiểm kê: đặt số lượng thực tế
-
-  const balance = round3(current.quantity + delta);
-  if (balance < 0) {
-    throw new Error(`Không đủ số lượng (hiện còn ${current.quantity})`);
-  }
-  delta = round3(delta);
-  if (delta === 0 && type !== "adjust") throw new Error("Số lượng phải khác 0");
-
-  await tx
-    .update(items)
-    .set({
-      quantity: balance,
-      updatedAt: new Date(),
-      ...(type === "in" && extra.unitPrice != null ? { unitPrice: extra.unitPrice } : {}),
-    })
-    .where(eq(items.id, itemId));
-
-  await tx.insert(stockMovements).values({
-    itemId,
-    type,
-    delta,
-    balanceAfter: balance,
-    unitPrice: extra.unitPrice ?? null,
-    reference: extra.reference || null,
-    note: extra.note || null,
-  });
-  return balance;
-}
-
 export async function recordMovement(
   itemId: number,
   _prev: ActionResult | null,
@@ -243,17 +115,15 @@ export async function recordMovement(
   }
 
   try {
-    const balance = await db.transaction((tx) =>
-      applyMovement(tx, me.id, itemId, type, amount, {
-        unitPrice,
-        note: String(formData.get("note") ?? "").trim(),
-        reference: String(formData.get("reference") ?? "").trim(),
-      }),
-    );
+    const { balance } = await recordMovementFor(me.id, itemId, type, amount, {
+      unitPrice,
+      note: String(formData.get("note") ?? "").trim(),
+      reference: String(formData.get("reference") ?? "").trim(),
+    });
     revalidateAll();
     return { ok: true, message: `Đã cập nhật. Tồn kho: ${balance}` };
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : "Có lỗi xảy ra" };
+    return { ok: false, error: pgErrorMessage(err) };
   }
 }
 
@@ -262,13 +132,11 @@ export async function quickAdjust(itemId: number, delta: number): Promise<Action
   const me = await requireUser();
   if (!Number.isFinite(delta) || delta === 0) return { ok: false, error: "Số lượng không hợp lệ" };
   try {
-    await db.transaction((tx) =>
-      applyMovement(tx, me.id, itemId, delta > 0 ? "in" : "out", Math.abs(delta), { note: "Điều chỉnh nhanh" }),
-    );
+    await recordMovementFor(me.id, itemId, delta > 0 ? "in" : "out", Math.abs(delta), { note: "Điều chỉnh nhanh" });
     revalidateAll();
     return { ok: true };
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : "Có lỗi xảy ra" };
+    return { ok: false, error: pgErrorMessage(err) };
   }
 }
 

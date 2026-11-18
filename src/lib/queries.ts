@@ -13,12 +13,10 @@ import {
   type MovementType,
 } from "@/db/schema";
 import { normalizeText } from "./format";
-import { requireUser } from "./auth/session";
+import { currentUserId } from "./auth/actor";
 
-/** id người dùng hiện tại — mọi truy vấn đều lọc theo đây */
-async function uid() {
-  return (await requireUser()).id;
-}
+/** id người dùng hiện tại (web: cookie phiên; MCP: chủ API token) — mọi truy vấn đều lọc theo đây */
+const uid = currentUserId;
 import { PAGE_SIZE } from "./constants";
 
 /* ------------------------------------------------------------------ */

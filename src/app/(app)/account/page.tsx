@@ -1,6 +1,9 @@
 import { Suspense } from "react";
 import { UserRound } from "lucide-react";
 import { DeleteAccountForm, LogoutOthersForm } from "@/components/account-forms";
+import { ApiTokensPanel } from "@/components/api-tokens-panel";
+import { listApiTokens } from "@/lib/auth/api-tokens";
+import { appBaseUrl } from "@/lib/auth/constants";
 import { PageHeader, Skeleton } from "@/components/ui";
 import { countSessions, requireUser } from "@/lib/auth/session";
 
@@ -19,7 +22,7 @@ export default function AccountPage() {
 
 async function Account() {
   const me = await requireUser();
-  const sessions = await countSessions(me.id);
+  const [sessions, tokens] = await Promise.all([countSessions(me.id), listApiTokens(me.id)]);
   return (
     <div className="space-y-4">
       <section className="card flex items-center gap-4 p-5">
@@ -41,6 +44,11 @@ async function Account() {
       <section className="card p-5">
         <h2 className="mb-3 text-sm font-semibold">Phiên đăng nhập</h2>
         <LogoutOthersForm otherSessions={Math.max(0, sessions - 1)} />
+      </section>
+
+      <section className="card p-5">
+        <h2 className="mb-3 text-sm font-semibold">API token cho AI agent (MCP)</h2>
+        <ApiTokensPanel tokens={tokens} mcpUrl={`${appBaseUrl()}/api/mcp`} />
       </section>
 
       <section className="card border-danger/30 p-5">

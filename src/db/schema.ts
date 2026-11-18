@@ -81,6 +81,30 @@ export const sessions = pgTable(
   (t) => [index("sessions_user_idx").on(t.userId)],
 );
 
+export const apiTokenScope = pgEnum("api_token_scope", ["read", "write"]);
+
+/** Token cá nhân cho agent / MCP (Authorization: Bearer inv_…). DB chỉ lưu SHA-256. */
+export const apiTokens = pgTable(
+  "api_tokens",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    tokenHash: text("token_hash").notNull().unique(),
+    /** vài ký tự đầu để người dùng nhận ra token (không đủ để dùng) */
+    prefix: text("prefix").notNull(),
+    scope: apiTokenScope("scope").notNull().default("write"),
+    lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    ...timestamps,
+  },
+  (t) => [index("api_tokens_user_idx").on(t.userId)],
+);
+
+export type ApiToken = typeof apiTokens.$inferSelect;
+
 /** Chủ sở hữu dữ liệu kho. Nullable chỉ để giữ dữ liệu tạo trước khi có tài khoản
  *  (được gán cho tài khoản đầu tiên đăng nhập). */
 const owner = () => uuid("user_id").references(() => users.id, { onDelete: "cascade" });
