@@ -1,36 +1,53 @@
-import { randomUUID } from "node:crypto";
-import path from "node:path";
 import { Readable } from "node:stream";
 import type { ReadableStream as NodeWebStream } from "node:stream/web";
 import { revalidatePath } from "next/cache";
 import { type NextRequest, NextResponse } from "next/server";
-import { and, eq, sql } from "drizzle-orm";
-import sharp from "sharp";
-import { db } from "@/db";
-import { items, media } from "@/db/schema";
-import { putObject } from "@/lib/storage";
+import { verifyBearer } from "@/lib/auth/api-tokens";
 import { getCurrentUser } from "@/lib/auth/session";
+import { InventoryError } from "@/lib/inventory/mutations";
+import { MediaStorageError, addItemMediaFor, mediaKindOf } from "@/lib/inventory/media";
 
 const MAX_MB = Number(process.env.MAX_UPLOAD_MB || 500);
 /** Ảnh nhỏ hơn mức này được đọc vào bộ nhớ để tạo thumbnail */
 const THUMB_MAX_BYTES = 40 * 1024 * 1024;
 
-function kindOf(contentType: string) {
-  if (contentType.startsWith("image/")) return "image" as const;
-  if (contentType.startsWith("video/")) return "video" as const;
-  return "file" as const;
+/**
+ * Xác định người upload:
+ *  - có header Authorization → bắt buộc API token hợp lệ, quyền ghi (AI agent / script);
+ *  - không có → cookie phiên đăng nhập (giao diện web).
+ */
+async function uploader(req: NextRequest): Promise<{ userId: string } | NextResponse> {
+  const authorization = req.headers.get("authorization");
+  if (authorization) {
+    const auth = await verifyBearer(authorization);
+    if (!auth) {
+      return NextResponse.json(
+        { error: "Thiếu hoặc sai API token (Authorization: Bearer inv_…)" },
+        { status: 401, headers: { "WWW-Authenticate": 'Bearer realm="inventory"' } },
+      );
+    }
+    if (auth.scope !== "write") {
+      return NextResponse.json({ error: "Token này chỉ có quyền đọc (scope=read)" }, { status: 403 });
+    }
+    return { userId: auth.userId };
+  }
+  const me = await getCurrentUser();
+  if (!me) return NextResponse.json({ error: "Chưa đăng nhập" }, { status: 401 });
+  return { userId: me.id };
 }
 
 /**
  * Upload 1 file thô (body = nội dung file).
- * POST /api/media/upload?itemId=1&filename=abc.jpg   (header Content-Type = loại file)
+ * POST /api/media/upload?itemId=1&filename=abc.jpg[&cover=1]   (header Content-Type = loại file)
+ * Đăng nhập bằng cookie (web) hoặc "Authorization: Bearer inv_…" (token quyền ghi).
  */
 export async function POST(req: NextRequest) {
-  const me = await getCurrentUser();
-  if (!me) return NextResponse.json({ error: "Chưa đăng nhập" }, { status: 401 });
+  const who = await uploader(req);
+  if (who instanceof NextResponse) return who;
 
   const itemId = Number(req.nextUrl.searchParams.get("itemId"));
-  const filename = (req.nextUrl.searchParams.get("filename") || "file").slice(0, 255);
+  const filename = req.nextUrl.searchParams.get("filename") || "file";
+  const setCover = ["1", "true"].includes(req.nextUrl.searchParams.get("cover") ?? "");
   const contentType = (req.headers.get("content-type") || "application/octet-stream").split(";")[0];
   const sizeHeader = Number(req.headers.get("content-length") || 0);
 
@@ -42,65 +59,24 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: `File vượt quá ${MAX_MB}MB` }, { status: 413 });
   }
 
-  const [item] = await db
-    .select({ id: items.id, cover: items.coverMediaId })
-    .from(items)
-    .where(and(eq(items.id, itemId), eq(items.userId, me.id)));
-  if (!item) return NextResponse.json({ error: "Không tìm thấy mặt hàng" }, { status: 404 });
-
-  const kind = kindOf(contentType);
-  const ext = path.extname(filename).toLowerCase().replace(/[^a-z0-9.]/g, "").slice(0, 10);
-  const key = `items/${itemId}/${randomUUID()}${ext}`;
-  let thumbKey: string | null = null;
-  let size = sizeHeader;
-
   try {
-    if (kind === "image" && sizeHeader > 0 && sizeHeader <= THUMB_MAX_BYTES) {
-      const buf = Buffer.from(await req.arrayBuffer());
-      size = buf.length;
-      await putObject(key, buf, buf.length, contentType);
-      try {
-        const thumb = await sharp(buf)
-          .rotate()
-          .resize(480, 480, { fit: "inside", withoutEnlargement: true })
-          .webp({ quality: 78 })
-          .toBuffer();
-        thumbKey = `${key}.thumb.webp`;
-        await putObject(thumbKey, thumb, thumb.length, "image/webp");
-      } catch (err) {
-        console.warn("[upload] không tạo được thumbnail:", (err as Error).message);
-        thumbKey = null;
-      }
-    } else {
-      const stream = Readable.fromWeb(req.body as unknown as NodeWebStream);
-      await putObject(key, stream, sizeHeader || undefined, contentType);
-    }
-  } catch (err) {
-    console.error("[upload] lỗi MinIO", err);
-    return NextResponse.json(
-      { error: "Không lưu được file vào MinIO. Kiểm tra MinIO đã chạy chưa." },
-      { status: 502 },
-    );
-  }
-
-  const [row] = await db
-    .insert(media)
-    .values({
-      itemId,
-      objectKey: key,
-      thumbKey,
+    const bufferIt = mediaKindOf(contentType) === "image" && sizeHeader > 0 && sizeHeader <= THUMB_MAX_BYTES;
+    const body = bufferIt
+      ? Buffer.from(await req.arrayBuffer())
+      : Readable.fromWeb(req.body as unknown as NodeWebStream);
+    const row = await addItemMediaFor(who.userId, itemId, {
+      body,
+      size: sizeHeader || undefined,
       filename,
       contentType,
-      size,
-      kind,
-      sortOrder: sql`coalesce((select max(${media.sortOrder}) + 1 from ${media} where ${media.itemId} = ${itemId}), 0)`,
-    })
-    .returning();
-
-  if (kind === "image" && item.cover == null) {
-    await db.update(items).set({ coverMediaId: row.id }).where(eq(items.id, itemId));
+      setCover,
+    });
+    revalidatePath("/", "layout");
+    return NextResponse.json({ media: row });
+  } catch (err) {
+    if (err instanceof MediaStorageError) return NextResponse.json({ error: err.message }, { status: 502 });
+    if (err instanceof InventoryError) return NextResponse.json({ error: err.message }, { status: 404 });
+    console.error("[upload]", err);
+    return NextResponse.json({ error: "Có lỗi xảy ra, vui lòng thử lại" }, { status: 500 });
   }
-
-  revalidatePath("/", "layout");
-  return NextResponse.json({ media: row });
 }

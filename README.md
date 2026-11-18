@@ -93,8 +93,22 @@ App có sẵn **MCP server** (Streamable HTTP) tại `<APP_BASE_URL>/api/mcp`. C
 | `create_item`, `update_item` | Thêm / sửa mặt hàng. Danh mục và vị trí truyền bằng tên, ví dụ `"Tụ điện > Tụ gốm"`; `createMissing` để tự tạo |
 | `record_movement` | Nhập / xuất / kiểm kê, có ghi lịch sử, không cho xuất quá số đang có |
 | `create_category`, `create_location` | Tạo danh mục / vị trí |
+| `add_item_image` | Gắn ảnh (base64, tối đa 8MB) vào mặt hàng; ảnh đầu tiên thành ảnh đại diện, `setCover` để đổi |
 
 Không có tool xoá: xoá chỉ làm được trên giao diện web. Token *chỉ đọc* bị chặn mọi tool ghi.
+
+### Upload file trực tiếp bằng API token
+
+Agent chạy được shell (Claude Code…) hoặc script nên upload thẳng file thay vì gửi base64 qua MCP: nhanh hơn, đỡ tốn token, và nhận cả video / PDF. Cần token quyền *đọc + ghi*:
+
+```bash
+curl -X POST "https://inventory.nguyenducquan.io.vn/api/media/upload?itemId=1&filename=hop-nhua.jpg" \
+  -H "Authorization: Bearer inv_…" \
+  -H "Content-Type: image/jpeg" \
+  --data-binary @photos/hop-nhua.jpg
+```
+
+Thêm `&cover=1` để đặt làm ảnh đại diện.
 
 ## CI/CD
 
