@@ -13,7 +13,7 @@ export default function DashboardPage() {
         title="Tổng quan"
         description="Tình trạng kho linh kiện, dụng cụ và vật tư của bạn"
         actions={
-          <Link href="/items/new" className="btn-primary">
+          <Link href="/items/new" className="btn-primary max-lg:hidden">
             <Plus className="size-4" /> Thêm mặt hàng
           </Link>
         }
@@ -27,13 +27,13 @@ export default function DashboardPage() {
 
 function DashboardSkeleton() {
   return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+    <div className="space-y-4 sm:space-y-6">
+      <div className="grid grid-cols-3 gap-2 sm:gap-3 lg:grid-cols-4">
         {Array.from({ length: 4 }, (_, i) => (
-          <Skeleton key={i} className="h-24" />
+          <Skeleton key={i} className={`h-20 sm:h-24 ${i === 1 ? "max-lg:order-last max-lg:col-span-3" : ""}`} />
         ))}
       </div>
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid gap-4 sm:gap-6 lg:grid-cols-2">
         <Skeleton className="h-80" />
         <Skeleton className="h-80" />
       </div>
@@ -47,25 +47,33 @@ function StatTile({
   icon,
   href,
   tone = "default",
+  className = "",
 }: {
   label: string;
   value: string;
   icon: React.ReactNode;
   href?: string;
   tone?: "default" | "warning" | "danger";
+  className?: string;
 }) {
   const toneCls =
     tone === "warning" ? "text-warning" : tone === "danger" ? "text-danger" : "text-foreground";
   const body = (
-    <div className="card h-full p-4 transition hover:border-accent/40">
-      <div className="flex items-center justify-between text-muted">
-        <span className="text-xs font-medium">{label}</span>
-        {icon}
+    <div className="card h-full p-3 transition hover:border-accent/40 sm:p-4">
+      <div className="flex items-center justify-between gap-1 text-muted">
+        <span className="truncate text-xs font-medium">{label}</span>
+        <span className="shrink-0">{icon}</span>
       </div>
-      <div className={`mt-2 text-2xl font-semibold tabular-nums sm:text-3xl ${toneCls}`}>{value}</div>
+      <div className={`mt-1.5 truncate text-2xl font-semibold tabular-nums sm:mt-2 sm:text-3xl ${toneCls}`}>{value}</div>
     </div>
   );
-  return href ? <Link href={href}>{body}</Link> : body;
+  return href ? (
+    <Link href={href} className={`min-w-0 ${className}`}>
+      {body}
+    </Link>
+  ) : (
+    <div className={`min-w-0 ${className}`}>{body}</div>
+  );
 }
 
 async function Dashboard() {
@@ -90,12 +98,18 @@ async function Dashboard() {
   const maxCat = Math.max(1, ...byCategory.map((c) => c.n));
 
   return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+    <div className="space-y-4 sm:space-y-6">
+      {/* Điện thoại: 3 ô đếm trên một hàng, ô giá trị (số dài) nằm trọn một hàng bên dưới */}
+      <div className="grid grid-cols-3 gap-2 sm:gap-3 lg:grid-cols-4">
         <StatTile label="Mặt hàng" value={fmtQty(totals.items)} icon={<Boxes className="size-4" />} href="/items" />
-        <StatTile label="Giá trị kho ước tính" value={fmtMoney(totals.value)} icon={<Wallet className="size-4" />} />
         <StatTile
-          label="Cần mua thêm"
+          label="Giá trị kho ước tính"
+          value={fmtMoney(totals.value)}
+          icon={<Wallet className="size-4" />}
+          className="max-lg:order-last max-lg:col-span-3"
+        />
+        <StatTile
+          label="Sắp hết"
           value={fmtQty(totals.low)}
           icon={<AlertTriangle className="size-4" />}
           href="/items?stock=low"
@@ -110,11 +124,11 @@ async function Dashboard() {
         />
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <section className="card p-4">
+      <div className="grid gap-4 sm:gap-6 lg:grid-cols-2">
+        <section className="card min-w-0 p-4">
           <div className="mb-3 flex items-center justify-between">
             <h2 className="font-semibold">Cần mua thêm</h2>
-            <Link href="/items?stock=low" className="text-xs text-accent hover:underline">
+            <Link href="/items?stock=low" className="-my-2 py-2 text-xs text-accent hover:underline">
               Xem tất cả
             </Link>
           </div>
@@ -141,10 +155,10 @@ async function Dashboard() {
           )}
         </section>
 
-        <section className="card p-4">
+        <section className="card min-w-0 p-4">
           <div className="mb-3 flex items-center justify-between">
             <h2 className="font-semibold">Nhập / xuất gần đây</h2>
-            <Link href="/movements" className="text-xs text-accent hover:underline">
+            <Link href="/movements" className="-my-2 py-2 text-xs text-accent hover:underline">
               Xem lịch sử
             </Link>
           </div>
@@ -164,7 +178,7 @@ async function Dashboard() {
                       {m.reference && ` · ${m.reference}`}
                     </p>
                   </div>
-                  <span className="text-sm font-semibold tabular-nums">
+                  <span className="shrink-0 text-sm font-semibold tabular-nums">
                     {m.delta > 0 ? "+" : ""}
                     {fmtQty(m.delta)} <span className="text-xs font-normal text-muted">{item.unit}</span>
                   </span>
@@ -174,7 +188,7 @@ async function Dashboard() {
           )}
         </section>
 
-        <section className="card p-4">
+        <section className="card min-w-0 p-4">
           <h2 className="mb-1 font-semibold">Số mặt hàng theo danh mục</h2>
           <p className="mb-4 text-xs text-muted">8 danh mục nhiều mặt hàng nhất</p>
           {byCategory.length === 0 ? (
@@ -188,7 +202,7 @@ async function Dashboard() {
                     className="group block"
                     title={`${c.name}: ${c.n} mặt hàng · ${fmtMoney(c.value)}`}
                   >
-                    <div className="mb-1 flex justify-between text-sm">
+                    <div className="mb-1 flex justify-between gap-3 text-sm">
                       <span className="truncate group-hover:underline">{c.name}</span>
                       <span className="tabular-nums text-muted">{c.n}</span>
                     </div>
@@ -205,7 +219,7 @@ async function Dashboard() {
           )}
         </section>
 
-        <section className="card p-4">
+        <section className="card min-w-0 p-4">
           <h2 className="mb-4 font-semibold">Theo loại</h2>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
             {byKind.map((k) => (

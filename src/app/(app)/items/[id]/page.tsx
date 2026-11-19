@@ -20,14 +20,14 @@ export async function generateMetadata(props: PageProps<"/items/[id]">) {
 export default function ItemPage(props: PageProps<"/items/[id]">) {
   return (
     <>
-      <Link href="/items" className="mb-2 inline-flex items-center gap-1 text-sm text-muted hover:text-foreground">
+      <Link href="/items" className="-mt-1 mb-1 inline-flex items-center gap-1 py-1 text-sm text-muted hover:text-foreground">
         <ChevronLeft className="size-4" /> Kho hàng
       </Link>
       <Suspense
         fallback={
-          <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
+          <div className="grid gap-4 sm:gap-6 lg:grid-cols-[1fr_360px]">
             <Skeleton className="h-[500px]" />
-            <Skeleton className="h-[400px]" />
+            <Skeleton className="h-[400px] max-lg:order-first" />
           </div>
         }
       >
@@ -62,7 +62,7 @@ async function ItemDetail({ params }: { params: PageProps<"/items/[id]">["params
 
   return (
     <>
-      <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
+      <div className="mb-4 flex flex-wrap items-start justify-between gap-3 sm:mb-6">
         <div className="min-w-0">
           <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">{item.name}</h1>
           <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-muted">
@@ -75,25 +75,28 @@ async function ItemDetail({ params }: { params: PageProps<"/items/[id]">["params
             )}
           </div>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="grid w-full grid-cols-3 gap-2 sm:flex sm:w-auto sm:flex-wrap">
           <Link href={`/items/${item.id}/edit`} className="btn-secondary">
             <Pencil className="size-4" /> Sửa
           </Link>
           <form action={duplicateItem.bind(null, item.id)}>
-            <button className="btn-secondary" title="Tạo mặt hàng tương tự">
+            <button className="btn-secondary w-full" title="Tạo mặt hàng tương tự">
               <Copy className="size-4" /> Nhân bản
             </button>
           </form>
           <form action={deleteItem.bind(null, item.id)}>
-            <ConfirmButton message={`Xoá "${item.name}" cùng toàn bộ ảnh/video và lịch sử?`}>
+            <ConfirmButton
+              className="btn-danger w-full"
+              message={`Xoá "${item.name}" cùng toàn bộ ảnh/video và lịch sử?`}
+            >
               <Trash2 className="size-4" /> Xoá
             </ConfirmButton>
           </form>
         </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
-        <div className="min-w-0 space-y-6">
+      <div className="grid gap-4 sm:gap-6 lg:grid-cols-[1fr_360px]">
+        <div className="min-w-0 space-y-4 sm:space-y-6">
           <section className="card p-4">
             <h2 className="mb-3 text-sm font-semibold">Ảnh, video & tài liệu</h2>
             <MediaGallery
@@ -195,7 +198,7 @@ async function ItemDetail({ params }: { params: PageProps<"/items/[id]">["params
                         {m.unitPrice != null && ` · ${fmtMoney(m.unitPrice)}/${item.unit}`}
                       </p>
                     </div>
-                    <form action={deleteMovement.bind(null, m.id)} className="transition sm:opacity-0 sm:group-hover:opacity-100">
+                    <form action={deleteMovement.bind(null, m.id)} className="transition group-hover:opacity-100 focus-within:opacity-100 can-hover:opacity-0">
                       <ConfirmButton
                         message="Xoá dòng lịch sử này? (Không làm thay đổi số lượng tồn kho hiện tại)"
                         className="btn-ghost btn-sm"
@@ -211,7 +214,7 @@ async function ItemDetail({ params }: { params: PageProps<"/items/[id]">["params
           </section>
         </div>
 
-        <aside className="space-y-4 lg:sticky lg:top-6 lg:self-start">
+        <aside className="min-w-0 space-y-4 max-lg:order-first lg:sticky lg:top-6 lg:self-start">
           <div className="card p-4">
             <p className="text-xs font-medium text-muted">Tồn kho hiện tại</p>
             <div className="mt-1">
@@ -244,8 +247,8 @@ async function ItemDetail({ params }: { params: PageProps<"/items/[id]">["params
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex justify-between gap-3">
-      <dt className="text-muted">{label}</dt>
-      <dd className="text-right">{children}</dd>
+      <dt className="shrink-0 text-muted">{label}</dt>
+      <dd className="min-w-0 text-right break-words">{children}</dd>
     </div>
   );
 }

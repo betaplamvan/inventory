@@ -80,8 +80,11 @@ export function TaxonomyManager({
                 />
               </li>
             ) : (
-              <li key={n.id} className="group flex items-center gap-2 px-3 py-2.5">
-                <div className="flex min-w-0 flex-1 items-center gap-1.5" style={{ paddingLeft: n.depth * 20 }}>
+              <li key={n.id} className="group flex items-center gap-1 py-1.5 pr-1.5 pl-3 sm:gap-2 sm:px-3 sm:py-2.5">
+                <div
+                  className="flex min-w-0 flex-1 items-center gap-1.5 pl-[calc(var(--depth)*0.875rem)] sm:pl-[calc(var(--depth)*1.25rem)]"
+                  style={{ "--depth": n.depth } as React.CSSProperties}
+                >
                   {n.depth > 0 && <ChevronRight className="size-3.5 shrink-0 text-muted/60" />}
                   <div className="min-w-0">
                     <p className="truncate text-sm font-medium">
@@ -93,12 +96,14 @@ export function TaxonomyManager({
                 </div>
                 <Link
                   href={`/items?${filterParam}=${n.id}`}
-                  className="rounded-full bg-surface-2 px-2 py-0.5 text-xs text-muted tabular-nums hover:text-foreground"
+                  className="shrink-0 rounded-full bg-surface-2 px-2 py-0.5 text-xs text-muted tabular-nums hover:text-foreground"
                   title="Xem mặt hàng"
+                  aria-label={`${n.itemCount} mặt hàng`}
                 >
-                  {n.itemCount} mặt hàng
+                  {n.itemCount}
+                  <span className="max-sm:hidden"> mặt hàng</span>
                 </Link>
-                <div className="flex gap-0.5 transition sm:opacity-0 sm:group-hover:opacity-100">
+                <div className="flex shrink-0 gap-0.5 transition group-hover:opacity-100 focus-within:opacity-100 can-hover:opacity-0">
                   <button
                     type="button"
                     className="btn-ghost btn-sm"
@@ -160,7 +165,7 @@ function NodeForm({
     <form action={action} className="card space-y-3 p-4">
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold">{title}</h3>
-        <button type="button" onClick={onDone} className="text-muted hover:text-foreground" aria-label="Đóng">
+        <button type="button" onClick={onDone} className="-m-2 p-2 text-muted hover:text-foreground" aria-label="Đóng">
           <X className="size-4" />
         </button>
       </div>

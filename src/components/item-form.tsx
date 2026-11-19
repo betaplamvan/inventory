@@ -111,7 +111,15 @@ export function ItemForm({
           </select>
         </Field>
         <Field label="Mã riêng (SKU)" error={errors.sku} hint="Mã bạn tự đặt, dán trên hộp. Không trùng nhau.">
-          <input name="sku" defaultValue={item?.sku ?? ""} className="input font-mono" placeholder="R-10K-0805" />
+          <input
+            name="sku"
+            defaultValue={item?.sku ?? ""}
+            className="input font-mono"
+            placeholder="R-10K-0805"
+            autoCapitalize="characters"
+            autoCorrect="off"
+            spellCheck={false}
+          />
         </Field>
         <Field label="Tags" hint="Phân cách bằng dấu phẩy">
           <input
@@ -142,7 +150,15 @@ export function ItemForm({
           </datalist>
         </Field>
         <Field label="Mã nhà sản xuất (MPN)">
-          <input name="mpn" defaultValue={item?.mpn ?? ""} className="input font-mono" placeholder="NE555P" />
+          <input
+            name="mpn"
+            defaultValue={item?.mpn ?? ""}
+            className="input font-mono"
+            placeholder="NE555P"
+            autoCapitalize="characters"
+            autoCorrect="off"
+            spellCheck={false}
+          />
         </Field>
         <Field label="Package / Kiểu chân">
           <input
@@ -159,7 +175,15 @@ export function ItemForm({
           </datalist>
         </Field>
         <Field label="Link datasheet" error={errors.datasheetUrl}>
-          <input name="datasheetUrl" defaultValue={item?.datasheetUrl ?? ""} className="input" placeholder="https://…" />
+          <input
+            name="datasheetUrl"
+            defaultValue={item?.datasheetUrl ?? ""}
+            className="input"
+            placeholder="https://…"
+            inputMode="url"
+            autoCapitalize="none"
+            autoCorrect="off"
+          />
         </Field>
 
         <div className="sm:col-span-2">
@@ -171,20 +195,20 @@ export function ItemForm({
                   name="specKey"
                   value={s.key}
                   onChange={(e) => setSpecs((arr) => arr.map((x, j) => (j === i ? { ...x, key: e.target.value } : x)))}
-                  className="input w-2/5"
+                  className="input w-2/5 min-w-0"
                   placeholder="Tên thông số"
                 />
                 <input
                   name="specValue"
                   value={s.value}
                   onChange={(e) => setSpecs((arr) => arr.map((x, j) => (j === i ? { ...x, value: e.target.value } : x)))}
-                  className="input flex-1"
+                  className="input min-w-0 flex-1"
                   placeholder="Giá trị"
                 />
                 <button
                   type="button"
                   onClick={() => setSpecs((arr) => arr.filter((_, j) => j !== i))}
-                  className="btn-ghost px-2"
+                  className="btn-ghost shrink-0 px-2 pointer-coarse:min-w-10"
                   aria-label="Xoá dòng"
                 >
                   <Trash2 className="size-4" />
@@ -207,7 +231,7 @@ export function ItemForm({
                     return [...a, { key: k, value: "" }];
                   })
                 }
-                className="rounded-md border border-dashed border-border px-2 py-1 text-xs text-muted hover:border-accent hover:text-accent"
+                className="rounded-md border border-dashed border-border px-2 py-1 text-xs text-muted hover:border-accent hover:text-accent pointer-coarse:min-h-9 pointer-coarse:px-3"
               >
                 + {k}
               </button>
@@ -271,7 +295,15 @@ export function ItemForm({
           </datalist>
         </Field>
         <Field label="Link mua hàng" error={errors.purchaseUrl} className="sm:col-span-2">
-          <input name="purchaseUrl" defaultValue={item?.purchaseUrl ?? ""} className="input" placeholder="https://…" />
+          <input
+            name="purchaseUrl"
+            defaultValue={item?.purchaseUrl ?? ""}
+            className="input"
+            placeholder="https://…"
+            inputMode="url"
+            autoCapitalize="none"
+            autoCorrect="off"
+          />
         </Field>
         <Field label="Ghi chú" className="sm:col-span-2">
           <textarea name="notes" defaultValue={item?.notes ?? ""} rows={2} className="input" />
@@ -283,7 +315,7 @@ export function ItemForm({
           <div className="sm:col-span-2">
             <label className="flex cursor-pointer flex-col items-center gap-2 rounded-xl border-2 border-dashed border-border px-4 py-8 text-center text-sm text-muted transition hover:border-accent hover:text-accent">
               <ImagePlus className="size-8" />
-              <span>Chọn ảnh, video hoặc datasheet PDF (có thể chọn nhiều)</span>
+              <span>Chụp / chọn ảnh, video hoặc datasheet PDF (có thể chọn nhiều)</span>
               <input
                 type="file"
                 multiple
@@ -299,10 +331,15 @@ export function ItemForm({
             {files.length > 0 && (
               <ul className="mt-3 space-y-1.5">
                 {files.map((f, i) => (
-                  <li key={i} className="flex items-center gap-2 rounded-lg bg-surface-2 px-3 py-2 text-sm">
-                    <span className="flex-1 truncate">{f.name}</span>
-                    <span className="text-xs text-muted">{fmtBytes(f.size)}</span>
-                    <button type="button" onClick={() => setFiles((a) => a.filter((_, j) => j !== i))} className="text-muted hover:text-danger">
+                  <li key={i} className="flex items-center gap-2 rounded-lg bg-surface-2 py-1 pr-1 pl-3 text-sm">
+                    <span className="min-w-0 flex-1 truncate">{f.name}</span>
+                    <span className="shrink-0 text-xs text-muted">{fmtBytes(f.size)}</span>
+                    <button
+                      type="button"
+                      onClick={() => setFiles((a) => a.filter((_, j) => j !== i))}
+                      className="grid size-9 shrink-0 place-items-center text-muted hover:text-danger"
+                      aria-label={`Bỏ ${f.name}`}
+                    >
                       <X className="size-4" />
                     </button>
                   </li>
@@ -313,12 +350,12 @@ export function ItemForm({
         </Section>
       )}
 
-      <div className="sticky bottom-0 -mx-4 flex items-center justify-end gap-2 border-t border-border bg-background/90 px-4 py-3 backdrop-blur sm:mx-0 sm:rounded-xl sm:border">
-        {progress && <span className="mr-auto truncate text-xs text-muted">{progress}</span>}
+      <div className="sticky bottom-(--tabbar) z-10 -mx-4 flex flex-wrap items-center justify-end gap-2 border-t border-border bg-background/90 px-4 py-3 backdrop-blur sm:mx-0 sm:rounded-xl sm:border">
+        {progress && <span className="w-full truncate text-xs text-muted sm:mr-auto sm:w-auto">{progress}</span>}
         <button type="button" onClick={() => router.back()} className="btn-secondary" disabled={pending}>
           Huỷ
         </button>
-        <button type="submit" className="btn-primary" disabled={pending}>
+        <button type="submit" className="btn-primary max-sm:flex-1" disabled={pending}>
           {pending && <Loader2 className="size-4 animate-spin" />}
           {item ? "Lưu thay đổi" : "Thêm vào kho"}
         </button>

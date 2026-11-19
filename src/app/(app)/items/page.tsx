@@ -1,11 +1,11 @@
 import Link from "next/link";
 import { Suspense } from "react";
-import { Download, PackageSearch, Plus } from "lucide-react";
+import { Download, MapPin, PackageSearch, Plus } from "lucide-react";
 import { getCategoryTree, getLocationTree, listItems, type SortKey, type StockFilter } from "@/lib/queries";
 import { fmtMoney } from "@/lib/format";
 import type { ItemKind } from "@/db/schema";
 import { ITEM_KINDS } from "@/lib/constants";
-import { ItemsFilters, type FilterValues } from "@/components/items-filters";
+import { ItemsFilters, ViewToggle, type FilterValues } from "@/components/items-filters";
 import { QuickAdjust } from "@/components/quick-adjust";
 import {
   EmptyState,
@@ -28,7 +28,7 @@ export default function ItemsPage(props: PageProps<"/items">) {
         title="Kho hàng"
         description="Linh kiện, module, dụng cụ và vật tư đang có"
         actions={
-          <Link href="/items/new" className="btn-primary">
+          <Link href="/items/new" className="btn-primary max-lg:hidden">
             <Plus className="size-4" /> Thêm mặt hàng
           </Link>
         }
@@ -36,7 +36,7 @@ export default function ItemsPage(props: PageProps<"/items">) {
       <Suspense
         fallback={
           <>
-            <Skeleton className="mb-4 h-36" />
+            <Skeleton className="mb-4 h-16 md:h-36" />
             <ListSkeleton />
           </>
         }
@@ -84,11 +84,12 @@ async function ItemsContent({ searchParams }: { searchParams: PageProps<"/items"
     <>
       <ItemsFilters values={values} categories={categories} locations={locations} />
 
-      <div className="mb-3 flex items-center justify-between text-sm text-muted">
-        <span>{total} mặt hàng</span>
+      <div className="mb-3 flex items-center gap-2 text-sm text-muted">
+        <span className="mr-auto">{total} mặt hàng</span>
         <a href={`/api/export${filterQs}`} className="btn-ghost btn-sm">
           <Download className="size-3.5" /> Xuất CSV
         </a>
+        <ViewToggle values={values} className="md:hidden" />
       </div>
 
       {rows.length === 0 ? (
@@ -100,7 +101,7 @@ async function ItemsContent({ searchParams }: { searchParams: PageProps<"/items"
           .
         </EmptyState>
       ) : values.view === "grid" ? (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+        <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 sm:gap-3 lg:grid-cols-4 xl:grid-cols-5">
           {rows.map((it) => (
             <div key={it.id} className="card group flex flex-col overflow-hidden transition hover:border-accent/40">
               <Link href={`/items/${it.id}`} className="block flex-1">
@@ -115,7 +116,7 @@ async function ItemsContent({ searchParams }: { searchParams: PageProps<"/items"
                 </div>
               </Link>
               <div className="px-3 pb-3">
-                <QuickAdjust itemId={it.id} quantity={it.quantity} minQuantity={it.minQuantity} unit={it.unit} />
+                <QuickAdjust itemId={it.id} quantity={it.quantity} minQuantity={it.minQuantity} unit={it.unit} block />
               </div>
             </div>
           ))}
@@ -123,10 +124,11 @@ async function ItemsContent({ searchParams }: { searchParams: PageProps<"/items"
       ) : (
         <div className="card divide-y divide-border">
           {rows.map((it) => (
-            <div key={it.id} className="flex flex-wrap items-center gap-3 p-3 sm:flex-nowrap">
+            // Điện thoại: 2 tầng — (ảnh + tên) rồi (vị trí + nút +/-); từ sm trở lên: một hàng ngang
+            <div key={it.id} className="flex flex-col gap-2 p-3 sm:flex-row sm:items-center sm:gap-3">
               <Link href={`/items/${it.id}`} className="flex min-w-0 flex-1 items-center gap-3">
                 <ItemThumb cover={it.cover} />
-                <div className="min-w-0">
+                <div className="min-w-0 flex-1">
                   <p className="line-clamp-2 font-medium hover:text-accent-strong sm:truncate">{it.name}</p>
                   <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
                     <KindBadge kind={it.kind} />
@@ -141,7 +143,15 @@ async function ItemsContent({ searchParams }: { searchParams: PageProps<"/items"
                 {it.location?.name ?? "—"}
               </div>
               <div className="hidden w-28 text-right text-sm text-muted lg:block">{fmtMoney(it.unitPrice)}</div>
-              <div className="ml-auto">
+              <div className="flex items-center justify-between gap-3 pl-15 sm:pl-0">
+                <span className="flex min-w-0 items-center gap-1 text-xs text-muted sm:hidden">
+                  {it.location && (
+                    <>
+                      <MapPin className="size-3.5 shrink-0" />
+                      <span className="truncate">{it.location.name}</span>
+                    </>
+                  )}
+                </span>
                 <QuickAdjust itemId={it.id} quantity={it.quantity} minQuantity={it.minQuantity} unit={it.unit} />
               </div>
             </div>

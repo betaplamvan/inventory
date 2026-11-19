@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+/* Thiết bị có chuột thật (hover được) — dùng cho các nút chỉ hiện khi rê chuột. */
+@custom-variant can-hover (@media (hover: hover));
+
 :root {
   --background: #f6f7f9;
   --surface: #ffffff;
@@ -12,6 +15,14 @@
   --accent-soft: #e3f6ee;
   --danger: #d33b3b;
   --warning: #c27803;
+  /* Chiều cao thanh điều hướng đáy trên điện thoại (0 ở desktop) */
+  --tabbar: calc(3.75rem + env(safe-area-inset-bottom, 0px));
+}
+
+@media (width >= 64rem) {
+  :root {
+    --tabbar: 0px;
+  }
 }
 
 @media (prefers-color-scheme: dark) {
@@ -55,8 +66,18 @@ body {
   color: var(--foreground);
 }
 
+/* Bỏ độ trễ / phóng to khi chạm đúp vào nút trên điện thoại (bấm +/- liên tục) */
+a,
+button,
+label,
+select,
+input,
+textarea {
+  touch-action: manipulation;
+}
+
 @utility input {
-  @apply w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground outline-none transition placeholder:text-muted/70 focus:border-accent focus:ring-2 focus:ring-accent/20 disabled:opacity-60;
+  @apply w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground outline-none transition placeholder:text-muted/70 pointer-coarse:min-h-11 pointer-coarse:text-base focus:border-accent focus:ring-2 focus:ring-accent/20 disabled:opacity-60;
 }
 @utility label {
   @apply mb-1 block text-xs font-medium text-muted;
@@ -65,7 +86,7 @@ body {
   @apply rounded-xl border border-border bg-surface;
 }
 @utility btn {
-  @apply inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium whitespace-nowrap transition select-none disabled:pointer-events-none disabled:opacity-50;
+  @apply inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium whitespace-nowrap transition select-none active:scale-[0.97] disabled:pointer-events-none disabled:opacity-50 pointer-coarse:min-h-11;
 }
 @utility btn-primary {
   @apply btn bg-accent text-white hover:bg-accent-strong dark:text-black;
@@ -80,5 +101,5 @@ body {
   @apply btn border border-danger/30 bg-surface text-danger hover:bg-danger/10;
 }
 @utility btn-sm {
-  @apply px-2 py-1 text-xs;
+  @apply px-2 py-1 text-xs pointer-coarse:min-h-9 pointer-coarse:min-w-9;
 }

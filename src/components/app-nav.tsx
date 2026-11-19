@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Suspense, useState, type ReactNode } from "react";
+import { Suspense, useEffect, useState, type ReactNode } from "react";
 import {
   ArrowLeftRight,
   Boxes,
@@ -12,7 +12,6 @@ import {
   MapPin,
   Menu,
   Plus,
-  X,
 } from "lucide-react";
 
 const LINKS = [
@@ -89,28 +88,131 @@ export function AppNav({ lowStockBadge, userMenu }: { lowStockBadge: ReactNode; 
   );
 }
 
-export function MobileNav({ lowStockBadge, userMenu }: { lowStockBadge: ReactNode; userMenu: ReactNode }) {
+type MobileNavProps = { lowStockBadge: ReactNode; userMenu: ReactNode };
+
+/** Điện thoại / tablet: thanh thương hiệu mỏng ở trên + thanh tab cố định ở đáy (vừa tầm ngón cái). */
+export function MobileNav(props: MobileNavProps) {
+  return (
+    <>
+      <header className="border-b border-border bg-surface pt-[env(safe-area-inset-top)] lg:hidden">
+        <div className="flex h-12 items-center px-4">
+          <Brand />
+        </div>
+      </header>
+      <Suspense fallback={<TabBar {...props} pathname={null} />}>
+        <ActiveTabBar {...props} />
+      </Suspense>
+    </>
+  );
+}
+
+function ActiveTabBar(props: MobileNavProps) {
+  const pathname = usePathname();
+  return <TabBar {...props} pathname={pathname} />;
+}
+
+const [HOME, ITEMS, MOVEMENTS, ...MORE_LINKS] = LINKS;
+
+function TabBar({ lowStockBadge, userMenu, pathname }: MobileNavProps & { pathname: string | null }) {
   const [open, setOpen] = useState(false);
+  const close = () => setOpen(false);
+  const isActive = (l: (typeof LINKS)[number]) =>
+    pathname != null && (l.exact ? pathname === l.href : pathname.startsWith(l.href));
+  const moreActive = pathname != null && (MORE_LINKS.some(isActive) || pathname.startsWith("/account"));
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = "";
+    };
+  }, [open]);
+
+  const tab = (l: (typeof LINKS)[number], badge?: ReactNode) => {
+    const active = !open && isActive(l);
+    return (
+      <Link
+        key={l.href}
+        href={l.href}
+        onClick={close}
+        aria-current={active ? "page" : undefined}
+        className={`flex flex-col items-center justify-center gap-0.5 text-[11px] font-medium transition active:scale-95 ${
+          active ? "text-accent-strong" : "text-muted"
+        }`}
+      >
+        <span className="relative">
+          <l.icon className="size-5.5" />
+          {badge && <span className="absolute -top-2 left-3.5 rounded-full bg-surface">{badge}</span>}
+        </span>
+        {l.label}
+      </Link>
+    );
+  };
 
   return (
-    <header className="sticky top-0 z-30 border-b border-border bg-surface/90 backdrop-blur lg:hidden">
-      <div className="flex h-14 items-center justify-between gap-2 px-4">
-        <Brand />
-        <div className="flex items-center gap-1">
-          <Link href="/items/new" onClick={() => setOpen(false)} className="btn-primary btn-sm" aria-label="Thêm mặt hàng">
-            <Plus className="size-4" />
-          </Link>
-          <button className="btn-ghost" onClick={() => setOpen((v) => !v)} aria-label="Menu">
-            {open ? <X className="size-5" /> : <Menu className="size-5" />}
-          </button>
-        </div>
-      </div>
+    <div className="lg:hidden">
       {open && (
-        <div className="space-y-2 border-t border-border px-4 py-3">
-          <NavLinks lowStockBadge={lowStockBadge} onNavigate={() => setOpen(false)} />
-          <div onClick={() => setOpen(false)}>{userMenu}</div>
+        <div className="fixed inset-0 z-40 bg-black/40" onClick={close}>
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Menu"
+            onClick={(e) => e.stopPropagation()}
+            className="absolute inset-x-0 bottom-0 max-h-[85dvh] space-y-2 overflow-y-auto rounded-t-2xl border-t border-border bg-surface px-4 pt-2 pb-[calc(var(--tabbar)+0.75rem)] shadow-2xl"
+          >
+            <div className="mx-auto mb-1 h-1 w-10 rounded-full bg-border" />
+            <nav className="flex flex-col gap-0.5">
+              {MORE_LINKS.map((l) => (
+                <Link
+                  key={l.href}
+                  href={l.href}
+                  onClick={close}
+                  className={`flex items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium ${
+                    isActive(l) ? "bg-accent-soft text-accent-strong" : "text-foreground active:bg-surface-2"
+                  }`}
+                >
+                  <l.icon className="size-5 text-muted" />
+                  {l.label}
+                </Link>
+              ))}
+            </nav>
+            <div onClick={close}>{userMenu}</div>
+          </div>
         </div>
       )}
-    </header>
+
+      <nav
+        aria-label="Điều hướng chính"
+        className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-surface/95 pr-[env(safe-area-inset-right)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] backdrop-blur"
+      >
+        <div className="mx-auto grid h-15 max-w-xl grid-cols-5">
+          {tab(HOME)}
+          {tab(ITEMS, lowStockBadge)}
+          <Link href="/items/new" onClick={close} aria-label="Thêm mặt hàng" className="grid place-items-center">
+            <span className="grid size-11 place-items-center rounded-full bg-accent text-white shadow-md transition active:scale-90 dark:text-black">
+              <Plus className="size-5.5" />
+            </span>
+          </Link>
+          {tab(MOVEMENTS)}
+          <button
+            type="button"
+            onClick={() => setOpen((v) => !v)}
+            aria-expanded={open}
+            aria-label="Menu"
+            className={`flex flex-col items-center justify-center gap-0.5 text-[11px] font-medium transition active:scale-95 ${
+              open || moreActive ? "text-accent-strong" : "text-muted"
+            }`}
+          >
+            <Menu className="size-5.5" />
+            Menu
+          </button>
+        </div>
+      </nav>
+    </div>
   );
 }

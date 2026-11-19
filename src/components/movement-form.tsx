@@ -28,7 +28,7 @@ export function MovementForm({ itemId, unit, currentPrice }: { itemId: number; u
             key={t.type}
             type="button"
             onClick={() => setType(t.type)}
-            className={`flex items-center justify-center gap-1.5 rounded-md py-1.5 text-sm font-medium transition ${
+            className={`flex items-center justify-center gap-1.5 rounded-md py-1.5 text-sm font-medium transition pointer-coarse:py-2.5 ${
               type === t.type ? "bg-surface text-foreground shadow-sm" : "text-muted hover:text-foreground"
             }`}
           >
@@ -42,7 +42,14 @@ export function MovementForm({ itemId, unit, currentPrice }: { itemId: number; u
           <label className="label">
             {tab.hint} ({unit})
           </label>
-          <input name="amount" inputMode="decimal" required className="input text-lg tabular-nums" placeholder="0" />
+          <input
+            name="amount"
+            inputMode="decimal"
+            required
+            className="input text-lg tabular-nums pointer-coarse:text-lg"
+            placeholder="0"
+            enterKeyHint="done"
+          />
         </div>
         {type === "in" && (
           <div>

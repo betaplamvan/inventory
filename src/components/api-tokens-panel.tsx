@@ -26,12 +26,12 @@ export function ApiTokensPanel({ tokens, mcpUrl }: { tokens: TokenRow[]; mcpUrl:
     <div className="space-y-4">
       <p className="text-sm text-muted">
         Cho AI agent (Claude Code, Claude Desktop, Cursor…) đọc và thêm dữ liệu vào kho qua MCP. Địa chỉ MCP:{" "}
-        <code className="rounded bg-surface-2 px-1.5 py-0.5 text-xs text-foreground">{mcpUrl}</code>
+        <code className="rounded bg-surface-2 px-1.5 py-0.5 text-xs break-all text-foreground">{mcpUrl}</code>
       </p>
       <p className="rounded-lg bg-surface-2 px-3 py-2 text-sm text-muted">
         <b className="text-foreground">Claude web / điện thoại:</b> Settings → Connectors → Add custom connector, dán địa chỉ MCP ở
         trên rồi đăng nhập Google để cho phép — không cần token. Claude Code cũng vậy:{" "}
-        <code className="text-xs text-foreground">claude mcp add --transport http kho-linh-kien {mcpUrl}</code> rồi gõ{" "}
+        <code className="text-xs break-all text-foreground">claude mcp add --transport http kho-linh-kien {mcpUrl}</code> rồi gõ{" "}
         <code className="text-xs text-foreground">/mcp</code> để đăng nhập. Kết nối OAuth hiện trong danh sách bên dưới.
       </p>
 

@@ -1,8 +1,8 @@
 "use client";
 
 import Form from "next/form";
-import { useRef } from "react";
-import { LayoutGrid, List, Search, X } from "lucide-react";
+import { useRef, useState } from "react";
+import { LayoutGrid, List, Search, SlidersHorizontal, X } from "lucide-react";
 import Link from "next/link";
 import { ITEM_KINDS, KIND_LABELS } from "@/lib/constants";
 
@@ -18,6 +18,17 @@ export type FilterValues = {
   view?: string;
 };
 
+/** Nút đổi dạng danh sách / lưới — trên điện thoại đặt cạnh dòng "N mặt hàng" thay vì trong khung lọc. */
+export function ViewToggle({ values, className = "" }: { values: FilterValues; className?: string }) {
+  const view = values.view === "grid" ? "grid" : "list";
+  return (
+    <div className={`flex rounded-lg border border-border bg-surface p-0.5 ${className}`}>
+      <ViewLink values={values} view="list" active={view === "list"} />
+      <ViewLink values={values} view="grid" active={view === "grid"} />
+    </div>
+  );
+}
+
 export function ItemsFilters({
   values,
   categories,
@@ -31,9 +42,12 @@ export function ItemsFilters({
   const submit = () => formRef.current?.requestSubmit();
   const hasFilter = !!(values.q || values.kind || values.category || values.location || values.stock);
   const view = values.view === "grid" ? "grid" : "list";
+  // Điện thoại: các ô lọc thu gọn sau nút "Lọc" để danh sách hiện ngay ở màn hình đầu
+  const [open, setOpen] = useState(false);
+  const activeCount = [values.kind, values.category, values.location, values.stock, values.sort].filter(Boolean).length;
 
   return (
-    <Form ref={formRef} action="/items" className="card mb-4 space-y-3 p-3">
+    <Form ref={formRef} action="/items" className="card mb-4 flex flex-col gap-3 p-3">
       <input type="hidden" name="view" value={view === "grid" ? "grid" : ""} />
       <div className="flex gap-2">
         <div className="relative flex-1">
@@ -42,16 +56,33 @@ export function ItemsFilters({
             name="q"
             defaultValue={values.q}
             key={values.q ?? ""}
-            placeholder="Tìm theo tên, mã, MPN, package, tag… (gõ không dấu cũng được)"
+            placeholder="Tìm tên, mã, MPN, tag…"
+            title="Tìm theo tên, mã, MPN, package, tag… (gõ không dấu cũng được)"
             className="input pl-9"
             type="search"
+            enterKeyHint="search"
           />
         </div>
-        <button type="submit" className="btn-primary">
+        <button type="submit" className="btn-primary max-md:hidden">
           Tìm
         </button>
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
+          aria-label="Bộ lọc"
+          className={`btn-secondary md:hidden ${open || activeCount ? "border-accent text-accent-strong" : ""}`}
+        >
+          <SlidersHorizontal className="size-4" />
+          Lọc
+          {activeCount > 0 && (
+            <span className="grid size-5 place-items-center rounded-full bg-accent text-[11px] font-semibold text-white dark:text-black">
+              {activeCount}
+            </span>
+          )}
+        </button>
       </div>
-      <div className="grid grid-cols-2 gap-2 md:grid-cols-5">
+      <div className={`grid-cols-2 gap-2 md:grid md:grid-cols-5 ${open ? "grid" : "hidden"}`}>
         <select name="kind" defaultValue={values.kind ?? ""} onChange={submit} className="input" key={`k${values.kind}`}>
           <option value="">Tất cả loại</option>
           {ITEM_KINDS.map((k) => (
@@ -110,7 +141,7 @@ export function ItemsFilters({
           <option value="value">Giá trị cao nhất</option>
         </select>
       </div>
-      <div className="flex items-center justify-between">
+      <div className={`items-center justify-between md:flex ${hasFilter ? "flex" : "hidden"}`}>
         {hasFilter ? (
           <Link href={view === "grid" ? "/items?view=grid" : "/items"} className="btn-ghost btn-sm">
             <X className="size-3.5" /> Xoá bộ lọc
@@ -118,10 +149,7 @@ export function ItemsFilters({
         ) : (
           <span />
         )}
-        <div className="flex rounded-lg border border-border p-0.5">
-          <ViewLink values={values} view="list" active={view === "list"} />
-          <ViewLink values={values} view="grid" active={view === "grid"} />
-        </div>
+        <ViewToggle values={values} className="max-md:hidden" />
       </div>
     </Form>
   );
@@ -138,7 +166,7 @@ function ViewLink({ values, view, active }: { values: FilterValues; view: "list"
     <Link
       href={`/items${s ? `?${s}` : ""}`}
       aria-label={view === "grid" ? "Dạng lưới" : "Dạng danh sách"}
-      className={`rounded-md p-1.5 ${active ? "bg-surface-2 text-foreground" : "text-muted hover:text-foreground"}`}
+      className={`rounded-md p-1.5 pointer-coarse:p-2 ${active ? "bg-surface-2 text-foreground" : "text-muted hover:text-foreground"}`}
     >
       <Icon className="size-4" />
     </Link>

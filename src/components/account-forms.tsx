@@ -27,10 +27,17 @@ export function DeleteAccountForm({ email }: { email: string }) {
     <form action={action} className="space-y-3">
       <p className="text-sm text-muted">
         Xoá vĩnh viễn tài khoản cùng <b>toàn bộ</b> mặt hàng, ảnh/video, danh mục, vị trí và lịch sử. Không thể hoàn
-        tác. Gõ <span className="font-mono text-foreground">{email}</span> để xác nhận.
+        tác. Gõ <span className="font-mono break-all text-foreground">{email}</span> để xác nhận.
       </p>
       <div className="flex flex-wrap gap-2">
-        <input name="confirmEmail" className="input max-w-xs" placeholder={email} autoComplete="off" />
+        <input
+          name="confirmEmail"
+          type="email"
+          className="input sm:max-w-xs"
+          placeholder={email}
+          autoComplete="off"
+          autoCapitalize="none"
+        />
         <SubmitButton className="btn-danger">
           <Trash2 className="size-4" /> Xoá tài khoản
         </SubmitButton>

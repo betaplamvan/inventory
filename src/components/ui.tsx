@@ -17,7 +17,7 @@ export function PageHeader({
   back?: ReactNode;
 }) {
   return (
-    <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
+    <div className="mb-4 flex flex-wrap items-end justify-between gap-3 sm:mb-6">
       <div className="min-w-0">
         {back && <div className="mb-1">{back}</div>}
         <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">{title}</h1>
@@ -56,7 +56,7 @@ export function StockQty({
   const state = stockState(quantity, minQuantity);
   const color = state === "out" ? "text-danger" : state === "low" ? "text-warning" : "text-foreground";
   return (
-    <span className="inline-flex items-baseline gap-1">
+    <span className="inline-flex shrink-0 items-baseline gap-1 whitespace-nowrap">
       <span className={`font-semibold tabular-nums ${color} ${size === "lg" ? "text-3xl" : "text-base"}`}>
         {fmtQty(quantity)}
       </span>
@@ -164,7 +164,7 @@ export function Pagination({
           <Link
             key={p}
             href={hrefFor(p)}
-            className={`min-w-9 rounded-lg px-3 py-1.5 text-center text-sm ${
+            className={`min-w-9 rounded-lg px-3 py-1.5 text-center text-sm pointer-coarse:min-w-11 pointer-coarse:py-2.5 ${
               p === page ? "bg-accent text-white dark:text-black" : "text-muted hover:bg-surface-2"
             }`}
           >

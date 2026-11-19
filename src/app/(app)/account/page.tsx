@@ -25,12 +25,12 @@ async function Account() {
   const [sessions, tokens] = await Promise.all([countSessions(me.id), listApiTokens(me.id)]);
   return (
     <div className="space-y-4">
-      <section className="card flex items-center gap-4 p-5">
+      <section className="card flex items-center gap-4 p-4 sm:p-5">
         {me.avatarUrl ? (
           // eslint-disable-next-line @next/next/no-img-element -- ảnh đại diện Google
-          <img src={me.avatarUrl} alt="" referrerPolicy="no-referrer" className="size-14 rounded-full" />
+          <img src={me.avatarUrl} alt="" referrerPolicy="no-referrer" className="size-14 shrink-0 rounded-full" />
         ) : (
-          <span className="grid size-14 place-items-center rounded-full bg-accent-soft text-accent-strong">
+          <span className="grid size-14 shrink-0 place-items-center rounded-full bg-accent-soft text-accent-strong">
             <UserRound className="size-7" />
           </span>
         )}
@@ -41,17 +41,17 @@ async function Account() {
         </div>
       </section>
 
-      <section className="card p-5">
+      <section className="card p-4 sm:p-5">
         <h2 className="mb-3 text-sm font-semibold">Phiên đăng nhập</h2>
         <LogoutOthersForm otherSessions={Math.max(0, sessions - 1)} />
       </section>
 
-      <section className="card p-5">
+      <section className="card min-w-0 p-4 sm:p-5">
         <h2 className="mb-3 text-sm font-semibold">API token cho AI agent (MCP)</h2>
         <ApiTokensPanel tokens={tokens} mcpUrl={`${appBaseUrl()}/api/mcp`} />
       </section>
 
-      <section className="card border-danger/30 p-5">
+      <section className="card border-danger/30 p-4 sm:p-5">
         <h2 className="mb-3 text-sm font-semibold text-danger">Xoá tài khoản</h2>
         <DeleteAccountForm email={me.email} />
       </section>
