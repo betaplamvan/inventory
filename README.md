@@ -100,7 +100,7 @@ Chi tiết kỹ thuật: theo đặc tả MCP Authorization — metadata ở `/.
 | `inventory_overview` | Tổng quan: số mặt hàng, giá trị kho, cần mua thêm, giao dịch gần đây |
 | `search_items` | Tìm / lọc mặt hàng (không phân biệt dấu), theo danh mục, vị trí, loại, tình trạng |
 | `get_item` | Chi tiết mặt hàng, thông số, link, ảnh/tài liệu, lịch sử |
-| `get_item_images` | Trả ảnh (thumbnail) để agent xem trực tiếp |
+| `get_item_images` | Trả ảnh (thumbnail) để agent xem trực tiếp, kèm URL xem có thời hạn của từng ảnh để hiển thị ngay trong câu trả lời chat (xem dưới) |
 | `list_categories`, `list_locations`, `list_movements` | Cây danh mục / vị trí, lịch sử nhập xuất |
 | `create_item`, `update_item` | Thêm / sửa mặt hàng. Danh mục và vị trí truyền bằng tên, ví dụ `"Tụ điện > Tụ gốm"`; `createMissing` để tự tạo |
 | `record_movement` | Nhập / xuất / kiểm kê, có ghi lịch sử, không cho xuất quá số đang có |
@@ -124,6 +124,18 @@ curl -sS -X POST "https://inventory.nguyenducquan.io.vn/api/media/upload?t=up_�
 - Ảnh đầu tiên tự thành ảnh đại diện; thêm `&cover=1` để đổi.
 
 Script cũng có thể upload bằng API token quyền ghi: `POST /api/media/upload?itemId=<id>&filename=<tên>` kèm header `Authorization: Bearer inv_…`.
+
+### Hiển thị ảnh trong câu trả lời
+
+Trình chat (Claude web / điện thoại…) không có cookie đăng nhập của app nên không tải được `/api/media/<id>`. `get_item_images` vì thế trả kèm cho mỗi ảnh một `thumbnailUrl`, `url` (ảnh gốc) và sẵn một đoạn `markdown` để agent chèn vào câu trả lời:
+
+```
+https://inventory.nguyenducquan.io.vn/api/media/42?thumb=1&t=ml_…
+```
+
+- Link được bảo vệ bằng token bí mật ngẫu nhiên trong URL (DB chỉ lưu SHA-256): chỉ **xem**, chỉ **ảnh** của đúng 1 mặt hàng (không mở được video / PDF), hết hạn sau 30 ngày (hoặc sớm hơn nếu API token hết hạn trước). Hết hạn thì ảnh trong đoạn chat cũ không hiện lại nữa.
+- Ai giữ URL thì xem được trong thời hạn đó (giống presigned URL), vì trình chat không gửi được cookie đăng nhập kèm ảnh.
+- Thu hồi API token / kết nối thì link tạo từ đó cũng mất hiệu lực.
 
 ## CI/CD
 

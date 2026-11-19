@@ -168,6 +168,29 @@ export const uploadLinks = pgTable(
   (t) => [index("upload_links_user_idx").on(t.userId)],
 );
 
+/**
+ * Link xem ảnh có thời hạn cho agent (tool MCP get_item_images trả về): chỉ ĐỌC ảnh của 1 mặt hàng,
+ * không cần cookie → client chat (Claude web / điện thoại) hiển thị được ảnh ngay trong câu trả lời.
+ * URL chứa token ngẫu nhiên, DB chỉ lưu SHA-256. Thu hồi API token → link mất hiệu lực (cascade).
+ */
+export const mediaLinks = pgTable(
+  "media_links",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tokenHash: text("token_hash").notNull().unique(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    itemId: integer("item_id")
+      .notNull()
+      .references((): AnyPgColumn => items.id, { onDelete: "cascade" }),
+    apiTokenId: uuid("api_token_id").references(() => apiTokens.id, { onDelete: "cascade" }),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    ...timestamps,
+  },
+  (t) => [index("media_links_user_idx").on(t.userId)],
+);
+
 /** Chủ sở hữu dữ liệu kho. Nullable chỉ để giữ dữ liệu tạo trước khi có tài khoản
  *  (được gán cho tài khoản đầu tiên đăng nhập). */
 const owner = () => uuid("user_id").references(() => users.id, { onDelete: "cascade" });

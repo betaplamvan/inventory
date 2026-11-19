@@ -33,9 +33,13 @@ import {
   type StockFilter,
 } from "@/lib/queries";
 import { UPLOAD_LINK_MAX_FILES, UPLOAD_LINK_MAX_MINUTES, createUploadLink } from "@/lib/inventory/upload-links";
+import { MEDIA_LINK_DAYS, createMediaLink } from "@/lib/inventory/media-links";
 import { getObject } from "@/lib/storage";
 
 export type McpAuth = { userId: string; scope: TokenScope; tokenId?: string };
+
+/** get_item_images: số ảnh tối đa được cấp URL trong một lần gọi */
+const MAX_IMAGE_URLS = 20;
 
 const json = (data: unknown): CallToolResult => ({
   content: [{ type: "text", text: JSON.stringify(data, null, 2) }],
@@ -373,11 +377,20 @@ export function buildMcpServer(auth: McpAuth) {
     "get_item_images",
     {
       title: "Xem ảnh mặt hàng",
-      description: "Trả về ảnh (thumbnail) của mặt hàng để xem trực tiếp.",
+      description:
+        "Ảnh của mặt hàng: trả ảnh (thumbnail) để bạn xem trực tiếp, kèm URL xem có thời hạn (token bí mật) của từng ảnh " +
+        "(không cần cookie đăng nhập). Để người dùng thấy ảnh ngay trong câu trả lời, chèn markdown ![mô tả](thumbnailUrl); " +
+        "url là ảnh gốc kích thước đầy đủ.",
       inputSchema: {
         id: z.number().int().positive().optional(),
         sku: z.string().optional(),
-        limit: z.number().int().min(1).max(4).optional().describe("Tối đa 4, mặc định 2"),
+        limit: z
+          .number()
+          .int()
+          .min(1)
+          .max(4)
+          .optional()
+          .describe("Số ảnh trả kèm để bạn xem trực tiếp: tối đa 4, mặc định 2. URL thì luôn có cho mọi ảnh."),
       },
       annotations: readOnly,
     },
@@ -385,13 +398,45 @@ export function buildMcpServer(auth: McpAuth) {
       const id = await findItemId(auth.userId, a);
       const it = await getItem(id);
       if (!it) return fail(`Không có mặt hàng id=${id}`);
-      const images = it.media
-        .filter((m) => m.kind === "image" && (m.thumbKey || m.size <= 1_500_000))
+      const all = it.media
+        .filter((m) => m.kind === "image")
         .sort((x, y) => (x.id === it.coverMediaId ? -1 : y.id === it.coverMediaId ? 1 : 0))
-        .slice(0, a.limit ?? 2);
-      if (!images.length) return json({ message: "Mặt hàng chưa có ảnh", id });
+        .slice(0, MAX_IMAGE_URLS);
+      if (!all.length) return json({ message: "Mặt hàng chưa có ảnh", id });
 
-      const content: CallToolResult["content"] = [{ type: "text", text: `${it.name} — ${images.length} ảnh` }];
+      // Link xem có thời hạn: client chat không có cookie của app nên /api/media/… thường sẽ bị 401
+      const link = await createMediaLink({ userId: auth.userId, itemId: id, apiTokenId: auth.tokenId });
+      const alt = it.name.replace(/[\[\]\\]/g, " ").replace(/\s+/g, " ").trim();
+      // Ảnh trả kèm cho model xem: chỉ bản thumbnail hoặc ảnh gốc nhỏ (base64 đi qua context)
+      const images = all.filter((m) => m.thumbKey || m.size <= 1_500_000).slice(0, a.limit ?? 2);
+
+      const content: CallToolResult["content"] = [
+        {
+          type: "text",
+          text: JSON.stringify(
+            {
+              item: { id, name: it.name, url: itemUrl(id) },
+              images: all.map((m) => {
+                const thumbnailUrl = link.urlFor(m.id, { thumb: true });
+                return {
+                  id: m.id,
+                  filename: m.filename,
+                  isCover: m.id === it.coverMediaId,
+                  thumbnailUrl,
+                  url: link.urlFor(m.id),
+                  markdown: `![${alt}](${thumbnailUrl})`,
+                };
+              }),
+              linksExpireAt: link.expiresAt,
+              note:
+                "Chèn trường markdown vào câu trả lời để người dùng thấy ảnh. Link có token bí mật: chỉ xem được ảnh của " +
+                `mặt hàng này, hết hạn lúc linksExpireAt (tối đa ${MEDIA_LINK_DAYS} ngày) — sau đó gọi lại tool để lấy link mới. Không đưa link cho bên thứ ba.`,
+            },
+            null,
+            2,
+          ),
+        },
+      ];
       for (const m of images) {
         const stream = await getObject(m.thumbKey ?? m.objectKey);
         const chunks: Buffer[] = [];

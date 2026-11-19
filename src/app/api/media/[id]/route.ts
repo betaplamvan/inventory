@@ -5,6 +5,7 @@ import { db } from "@/db";
 import { items, media } from "@/db/schema";
 import { getObject, statObject } from "@/lib/storage";
 import { getCurrentUser } from "@/lib/auth/session";
+import { resolveMediaLink } from "@/lib/inventory/media-links";
 
 /**
  * Stream file từ MinIO qua Next (không cần public MinIO ra ngoài).
@@ -12,21 +13,32 @@ import { getCurrentUser } from "@/lib/auth/session";
  *   /api/media/12            -> file gốc
  *   /api/media/12?thumb=1    -> thumbnail (nếu có)
  *   /api/media/12?download=1 -> tải về
+ *   /api/media/12?t=ml_…     -> link xem ảnh có thời hạn do tool MCP get_item_images cấp (không cần cookie)
  */
 export async function GET(req: NextRequest, ctx: RouteContext<"/api/media/[id]">) {
-  const me = await getCurrentUser();
-  if (!me) return new NextResponse("Unauthorized", { status: 401 });
-
   const { id } = await ctx.params;
   const mediaId = Number(id);
   if (!Number.isInteger(mediaId)) return new NextResponse("Not found", { status: 404 });
 
-  // Chỉ chủ của mặt hàng mới xem được file
+  // Link xem: chỉ đọc được ẢNH của đúng mặt hàng mà link được cấp cho (không mở video / PDF / file).
+  // Link sai / hết hạn thì vẫn thử cookie (chủ kho mở lại link cũ khi đang đăng nhập).
+  const linkToken = req.nextUrl.searchParams.get("t");
+  const link = linkToken ? await resolveMediaLink(linkToken) : null;
+  const me = link ? null : await getCurrentUser();
+  if (!link && !me) {
+    return new NextResponse(linkToken ? "Link ảnh sai hoặc đã hết hạn" : "Unauthorized", { status: 401 });
+  }
+
+  // Chỉ chủ của mặt hàng (hoặc người giữ link xem của mặt hàng đó) mới xem được file
   const [row] = await db
     .select({ m: media })
     .from(media)
     .innerJoin(items, eq(items.id, media.itemId))
-    .where(and(eq(media.id, mediaId), eq(items.userId, me.id)));
+    .where(
+      link
+        ? and(eq(media.id, mediaId), eq(media.kind, "image"), eq(items.id, link.itemId), eq(items.userId, link.userId))
+        : and(eq(media.id, mediaId), eq(items.userId, me!.id)),
+    );
   const m = row?.m;
   if (!m) return new NextResponse("Not found", { status: 404 });
 
