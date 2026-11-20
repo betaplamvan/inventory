@@ -54,8 +54,9 @@ jobs:
     needs: build
     # Chạy khi: GitHub-hosted bị tắt (skipped), hoặc job GitHub thất bại mà CHƯA chạy bước nào
     # (không nhận được runner — hết quota/spending limit). Lỗi code thật (lint đỏ) thì không chạy lại.
+    # KHÔNG BAO GIỜ chạy cho pull_request: repo public, PR từ fork sẽ chạy code lạ trên máy chủ self-hosted.
     if: >-
-      ${{ !cancelled() && (inputs.runner || vars.CI_RUNNER || 'auto') != 'github' && (
+      ${{ !cancelled() && github.event_name != 'pull_request' && (inputs.runner || vars.CI_RUNNER || 'auto') != 'github' && (
         needs.build.result == 'skipped' ||
         (needs.build.result == 'failure' && needs.build.outputs.started != 'true')
       ) }}
