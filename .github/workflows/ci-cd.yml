@@ -1,5 +1,5 @@
 # CI/CD: build ưu tiên ubuntu-latest của GitHub; job đó KHÔNG khởi động được (hết quota phút)
-# → build lại trên self-hosted runner (label "minisforum"). Deploy luôn chạy trên runner đó. Chi tiết: deploy/README.md.
+# → build lại trên self-hosted runner (Linux x64). Deploy luôn chạy trên runner đó. Chi tiết: deploy/README.md.
 name: CI/CD
 
 on:
@@ -16,9 +16,9 @@ on:
   workflow_dispatch:
     inputs:
       runner:
-        description: "Nơi build (auto = GitHub trước, hết quota thì minisforum)"
+        description: "Nơi build (auto = GitHub trước, hết quota thì self-hosted)"
         type: choice
-        options: [auto, github, minisforum]
+        options: [auto, github, self-hosted]
         default: auto
 
 # Không hủy run đang deploy trên main; PR thì chỉ giữ run mới nhất.
@@ -33,8 +33,8 @@ permissions:
 jobs:
   build:
     name: Build (GitHub)
-    # Biến repo CI_RUNNER=minisforum → bỏ hẳn GitHub-hosted (khi biết chắc đã hết quota).
-    if: ${{ (inputs.runner || vars.CI_RUNNER || 'auto') != 'minisforum' }}
+    # Biến repo CI_RUNNER=self-hosted → bỏ hẳn GitHub-hosted (khi biết chắc đã hết quota).
+    if: ${{ (inputs.runner || vars.CI_RUNNER || 'auto') != 'self-hosted' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     outputs:
@@ -50,7 +50,7 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
 
   build-fallback:
-    name: Build (minisforum, dự phòng)
+    name: Build (self-hosted, dự phòng)
     needs: build
     # Chạy khi: GitHub-hosted bị tắt (skipped), hoặc job GitHub thất bại mà CHƯA chạy bước nào
     # (không nhận được runner — hết quota/spending limit). Lỗi code thật (lint đỏ) thì không chạy lại.
@@ -59,7 +59,7 @@ jobs:
         needs.build.result == 'skipped' ||
         (needs.build.result == 'failure' && needs.build.outputs.started != 'true')
       ) }}
-    runs-on: [self-hosted, minisforum]
+    runs-on: [self-hosted, linux, x64]
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
@@ -70,12 +70,12 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
 
   deploy:
-    name: Deploy (minisforum)
+    name: Deploy (self-hosted)
     needs: [build, build-fallback]
     if: >-
       ${{ !cancelled() && github.event_name != 'pull_request' && github.ref == 'refs/heads/main' &&
       (needs.build.result == 'success' || needs.build-fallback.result == 'success') }}
-    runs-on: [self-hosted, minisforum]
+    runs-on: [self-hosted, linux, x64]
     environment: production
     timeout-minutes: 15
     concurrency:

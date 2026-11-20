@@ -13,7 +13,7 @@ Commit chỉ sửa file `*.md` thì không chạy gì.
 
 - **Build** gồm `npm ci`, lint, typecheck, build image Docker rồi push lên GHCR `ghcr.io/<owner>/inventory` với tag `<sha>` và `latest`. Các bước dùng chung nằm trong composite action [`app-ci`](../.github/actions/app-ci/action.yml).
 - **Dự phòng** chỉ chạy khi job GitHub *chưa chạy được bước nào* (hết phút, chạm spending limit). Lỗi code thật thì không build lại.
-  - Biến repo `CI_RUNNER=minisforum` bỏ hẳn job GitHub; `CI_RUNNER=github` tắt dự phòng.
+  - Biến repo `CI_RUNNER=self-hosted` bỏ hẳn job GitHub; `CI_RUNNER=github` tắt dự phòng.
   - Chạy tay: Actions → CI/CD → *Run workflow* → chọn `runner`.
 - **Deploy** dùng [`deploy-container.sh`](deploy-container.sh):
   - pull image theo sha, thay container `inventory`, chờ healthcheck `/api/health` (kiểm tra cả kết nối Postgres);
@@ -24,7 +24,7 @@ Commit chỉ sửa file `*.md` thì không chạy gì.
 
 ## Chuẩn bị (một lần)
 
-1. **Runner:** một self-hosted runner (cấp repo hoặc org) có label `minisforum` (đổi label thì sửa cả `ci-cd.yml` và `.github/actionlint.yaml`). Nếu job deploy đứng ở trạng thái *Queued*, vào Org → Settings → Actions → Runner groups và cho repo `inventory` dùng group chứa runner.
+1. **Runner:** một self-hosted runner Linux x64 (cấp repo hoặc org). Workflow chọn runner theo label mặc định `[self-hosted, linux, x64]`; nếu repo được chia sẻ nhiều runner như vậy mà chỉ một máy có Postgres / MinIO, gắn thêm label riêng cho máy đó rồi thêm vào `runs-on` trong `ci-cd.yml` và `.github/actionlint.yaml`. Nếu job deploy đứng ở trạng thái *Queued*, vào Org → Settings → Actions → Runner groups và cho repo `inventory` dùng group chứa runner.
 2. **Postgres / MinIO** trên máy chủ:
    - Postgres: role `inventory` là chủ DB `inventory`; các role khác (trừ superuser) không kết nối được vào DB này. Migration tự chạy bằng role này.
    - MinIO: user `inventory-app` gắn policy `inventory-rw`, chỉ đọc/ghi/xoá trong `inventory-bucket` và không tạo được bucket khác.

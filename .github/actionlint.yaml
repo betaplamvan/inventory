@@ -1,4 +1,4 @@
-# Label của self-hosted runner (deploy/README.md) để actionlint không báo "unknown label".
+# Cấu hình actionlint. Workflow chỉ dùng label mặc định của self-hosted runner (self-hosted, linux, x64),
+# nên không cần khai báo label riêng. Thêm label riêng của runner vào đây nếu workflow dùng tới.
 self-hosted-runner:
-  labels:
-    - minisforum
+  labels: []
