@@ -1,4 +1,6 @@
+import Link from "next/link";
 import { Suspense } from "react";
+import { QrCode } from "lucide-react";
 import { deleteLocation, saveLocation } from "@/actions/taxonomy";
 import { TaxonomyManager } from "@/components/taxonomy-manager";
 import { ListSkeleton, PageHeader } from "@/components/ui";
@@ -12,6 +14,15 @@ export default function LocationsPage() {
       <PageHeader
         title="Vị trí cất"
         description="Tủ, kệ, hộp, ngăn… nơi bạn để đồ. Có thể lồng nhiều cấp (VD: Tủ A › Ngăn 3)"
+        actions={
+          <Link
+            href="/labels?locations=all"
+            className="btn-secondary btn-sm"
+            title="In nhãn QR dán lên tủ / hộp: quét là ra danh sách đồ bên trong"
+          >
+            <QrCode className="size-3.5" /> In nhãn vị trí
+          </Link>
+        }
       />
       <Suspense fallback={<ListSkeleton />}>
         <Locations />

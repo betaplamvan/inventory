@@ -7,7 +7,9 @@ import { db } from "@/db";
 import { items, media, stockMovements, type MovementType } from "@/db/schema";
 import { requireUser } from "@/lib/auth/session";
 import { buildSearchText, fieldErrors, itemFromFormData, parseNum } from "@/lib/item-input";
-import { createItemFor, pgErrorMessage, recordMovementFor, updateItemFor } from "@/lib/inventory/mutations";
+import { InventoryError, createItemFor, pgErrorMessage, recordMovementFor, updateItemFor } from "@/lib/inventory/mutations";
+import { liveItemOf } from "@/lib/inventory/scope";
+import { trashItemFor } from "@/lib/inventory/trash";
 import { removeObjects } from "@/lib/storage";
 
 export type ActionResult =
@@ -16,16 +18,6 @@ export type ActionResult =
 
 function revalidateAll() {
   revalidatePath("/", "layout");
-}
-
-/** id mặt hàng nếu thuộc user, ngược lại null */
-async function ownedItemId(userId: string, itemId: number) {
-  if (!Number.isInteger(itemId)) return null;
-  const [row] = await db
-    .select({ id: items.id })
-    .from(items)
-    .where(and(eq(items.id, itemId), eq(items.userId, userId)));
-  return row?.id ?? null;
 }
 
 /* ---------------- Thêm / sửa / xoá mặt hàng ---------------- */
@@ -60,22 +52,22 @@ export async function updateItem(id: number, formData: FormData): Promise<Action
   }
 }
 
+/** Chuyển vào thùng rác (khôi phục được ở trang Thùng rác; xoá hẳn sau TRASH_DAYS ngày). */
 export async function deleteItem(id: number) {
   const me = await requireUser();
-  if (!(await ownedItemId(me.id, id))) redirect("/items");
-  const files = await db
-    .select({ key: media.objectKey, thumb: media.thumbKey })
-    .from(media)
-    .where(eq(media.itemId, id));
-  await db.delete(items).where(and(eq(items.id, id), eq(items.userId, me.id)));
-  await removeObjects(files.flatMap((f) => [f.key, f.thumb]));
+  try {
+    await trashItemFor(me.id, id);
+  } catch (err) {
+    // Không có / đã xoá rồi thì coi như xong; lỗi khác (DB…) phải nổi lên chứ không báo thành công giả
+    if (!(err instanceof InventoryError)) throw err;
+  }
   revalidateAll();
   redirect("/items");
 }
 
 export async function duplicateItem(id: number) {
   const me = await requireUser();
-  const src = await db.query.items.findFirst({ where: and(eq(items.id, id), eq(items.userId, me.id)) });
+  const src = await db.query.items.findFirst({ where: and(eq(items.id, id), liveItemOf(me.id)) });
   if (!src) return;
   const { id: _id, createdAt: _c, updatedAt: _u, coverMediaId: _cv, sku, ...rest } = src;
   const name = `${src.name} (bản sao)`;
@@ -146,7 +138,7 @@ export async function deleteMovement(movementId: number) {
     .select({ id: stockMovements.id })
     .from(stockMovements)
     .innerJoin(items, eq(items.id, stockMovements.itemId))
-    .where(and(eq(stockMovements.id, movementId), eq(items.userId, me.id)));
+    .where(and(eq(stockMovements.id, movementId), liveItemOf(me.id)));
   if (!m) return;
   // Chỉ xoá bản ghi lịch sử, không thay đổi tồn kho hiện tại.
   await db.delete(stockMovements).where(eq(stockMovements.id, m.id));
@@ -161,7 +153,7 @@ async function ownedMedia(userId: string, mediaId: number) {
     .select({ media })
     .from(media)
     .innerJoin(items, eq(items.id, media.itemId))
-    .where(and(eq(media.id, mediaId), eq(items.userId, userId)));
+    .where(and(eq(media.id, mediaId), liveItemOf(userId)));
   return row?.media;
 }
 

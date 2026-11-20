@@ -15,6 +15,13 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: { default: "Kho linh kiện", template: "%s · Kho linh kiện" },
   description: "Quản lý linh kiện, dụng cụ và vật tư điện tử cá nhân",
+  applicationName: "Kho linh kiện",
+  icons: {
+    icon: [{ url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" }],
+    apple: "/icons/apple-touch-icon.png",
+  },
+  // iOS: mở từ màn hình chính thành app toàn màn hình
+  appleWebApp: { capable: true, title: "Kho", statusBarStyle: "default" },
 };
 
 export const viewport: Viewport = {

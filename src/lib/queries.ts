@@ -1,5 +1,5 @@
 import "server-only";
-import { and, asc, count, desc, eq, gt, inArray, lte, sql, type SQL } from "drizzle-orm";
+import { and, asc, count, desc, eq, gt, inArray, lte, or, sql, type SQL } from "drizzle-orm";
 import { db } from "@/db";
 import {
   categories,
@@ -14,10 +14,12 @@ import {
 } from "@/db/schema";
 import { normalizeText } from "./format";
 import { currentUserId } from "./auth/actor";
+import { PAGE_SIZE } from "./constants";
+import { liveItem, liveItemOf } from "./inventory/scope";
 
 /** id người dùng hiện tại (web: cookie phiên; MCP: chủ API token) — mọi truy vấn đều lọc theo đây */
 const uid = currentUserId;
-import { PAGE_SIZE } from "./constants";
+// Mọi truy vấn mặt hàng dùng liveItemOf(userId): của user đó và không nằm trong thùng rác.
 
 /* ------------------------------------------------------------------ */
 /* Cây danh mục / vị trí                                               */
@@ -71,7 +73,7 @@ export async function getCategoryTree() {
     db
       .select({ id: items.categoryId, n: count() })
       .from(items)
-      .where(eq(items.userId, userId))
+      .where(liveItemOf(userId))
       .groupBy(items.categoryId),
   ]);
   return flattenTree<Category>(rows, new Map(counts.map((c) => [c.id ?? -1, c.n])));
@@ -84,7 +86,7 @@ export async function getLocationTree() {
     db
       .select({ id: items.locationId, n: count() })
       .from(items)
-      .where(eq(items.userId, userId))
+      .where(liveItemOf(userId))
       .groupBy(items.locationId),
   ]);
   return flattenTree<Location>(rows, new Map(counts.map((c) => [c.id ?? -1, c.n])));
@@ -122,6 +124,8 @@ export type ItemFilters = {
   sort?: SortKey;
   page?: number;
   pageSize?: number;
+  /** Chỉ các id này (in nhãn cho những mặt hàng đã chọn) */
+  ids?: number[];
 };
 
 /** "Sắp hết / cần mua": có đặt mức tối thiểu và số lượng <= mức đó (gồm cả đã hết) */
@@ -134,7 +138,8 @@ function escapeLike(s: string) {
 
 async function buildItemWhere(f: ItemFilters) {
   const userId = await uid();
-  const conds: SQL[] = [eq(items.userId, userId)];
+  const conds: SQL[] = [liveItemOf(userId)];
+  if (f.ids) conds.push(inArray(items.id, f.ids.length ? f.ids : [-1]));
   if (f.q) {
     for (const word of normalizeText(f.q).split(" ").filter(Boolean)) {
       conds.push(sql`${items.searchText} like ${`%${escapeLike(word)}%`}`);
@@ -197,12 +202,13 @@ export async function listItems(f: ItemFilters) {
 
 export type ItemListRow = Awaited<ReturnType<typeof listItems>>["rows"][number];
 
-/** Dùng cho export CSV: không phân trang */
-export async function listAllItems(f: ItemFilters) {
+/** Dùng cho export CSV / in nhãn: không phân trang (limit = chặn trên, nếu có) */
+export async function listAllItems(f: ItemFilters, limit?: number) {
   const where = await buildItemWhere(f);
   return db.query.items.findMany({
     where,
     orderBy: orderFor(f.sort ?? "name"),
+    limit,
     with: { category: true, location: true },
   });
 }
@@ -215,7 +221,7 @@ export async function getItem(id: number) {
   if (!Number.isInteger(id) || id <= 0) return undefined;
   const userId = await uid();
   return db.query.items.findFirst({
-    where: and(eq(items.id, id), eq(items.userId, userId)),
+    where: and(eq(items.id, id), liveItemOf(userId)),
     with: {
       category: true,
       location: true,
@@ -232,7 +238,7 @@ export async function getItemMovements(itemId: number, limit = 50) {
     .select({ m: stockMovements })
     .from(stockMovements)
     .innerJoin(items, eq(items.id, stockMovements.itemId))
-    .where(and(eq(stockMovements.itemId, itemId), eq(items.userId, userId)))
+    .where(and(eq(stockMovements.itemId, itemId), liveItemOf(userId)))
     .orderBy(desc(stockMovements.createdAt), desc(stockMovements.id))
     .limit(limit);
   return rows.map((r) => r.m);
@@ -245,7 +251,7 @@ export async function getItemMovements(itemId: number, limit = 50) {
 export async function listMovements(opts: { type?: MovementType; q?: string; page?: number }) {
   const pageSize = 50;
   const page = Math.max(1, opts.page ?? 1);
-  const conds: SQL[] = [eq(items.userId, await uid())];
+  const conds: SQL[] = [liveItemOf(await uid())];
   if (opts.type) conds.push(eq(stockMovements.type, opts.type));
   if (opts.q) {
     for (const word of normalizeText(opts.q).split(" ").filter(Boolean)) {
@@ -284,7 +290,7 @@ export async function listMovements(opts: { type?: MovementType; q?: string; pag
 
 export async function getDashboard() {
   const userId = await uid();
-  const mine = eq(items.userId, userId);
+  const mine = liveItemOf(userId);
   const [[totals], byKind, byCategory, lowStock, recent] = await Promise.all([
     db
       .select({
@@ -309,7 +315,7 @@ export async function getDashboard() {
         value: sql<number>`coalesce(sum(${items.quantity} * coalesce(${items.unitPrice}, 0)), 0)::float8`,
       })
       .from(categories)
-      .leftJoin(items, eq(items.categoryId, categories.id))
+      .leftJoin(items, and(eq(items.categoryId, categories.id), liveItem))
       .where(eq(categories.userId, userId))
       .groupBy(categories.id, categories.name)
       .orderBy(desc(count(items.id)))
@@ -339,7 +345,7 @@ export async function countLowStock() {
   const [row] = await db
     .select({ n: sql<number>`count(*)::int` })
     .from(items)
-    .where(and(eq(items.userId, await uid()), lowStockCond));
+    .where(and(liveItemOf(await uid()), lowStockCond));
   return row?.n ?? 0;
 }
 
@@ -350,14 +356,14 @@ export async function getSuggestions() {
     db
       .selectDistinct({ v: sql<string>`${col}` })
       .from(items)
-      .where(and(eq(items.userId, userId), sql`${col} is not null and ${col} <> ''`))
+      .where(and(liveItemOf(userId), sql`${col} is not null and ${col} <> ''`))
       .orderBy(sql`1`)
       .limit(200);
   const [manufacturers, packages, suppliers, tags] = await Promise.all([
     distinct(items.manufacturer),
     distinct(items.package),
     distinct(items.supplier),
-    db.execute<{ tag: string }>(sql`select distinct unnest(${items.tags}) as tag from ${items} where ${items.userId} = ${userId} order by 1 limit 300`),
+    db.execute<{ tag: string }>(sql`select distinct unnest(${items.tags}) as tag from ${items} where ${items.userId} = ${userId} and ${items.deletedAt} is null order by 1 limit 300`),
   ]);
   return {
     manufacturers: manufacturers.map((r) => r.v!),
@@ -365,4 +371,44 @@ export async function getSuggestions() {
     suppliers: suppliers.map((r) => r.v!),
     tags: [...tags].map((r) => r.tag),
   };
+}
+
+/* ------------------------------------------------------------------ */
+/* Quét mã                                                             */
+/* ------------------------------------------------------------------ */
+
+/** Mặt hàng có SKU hoặc MPN đúng bằng mã (không phân biệt hoa thường). SKU khớp được ưu tiên. */
+export async function findItemsByCode(code: string, limit = 5) {
+  const userId = await uid();
+  const c = code.trim().toLowerCase();
+  if (!c) return [];
+  return db
+    .select({ id: items.id, name: items.name, sku: items.sku })
+    .from(items)
+    .where(and(liveItemOf(userId), or(sql`lower(${items.sku}) = ${c}`, sql`lower(${items.mpn}) = ${c}`)))
+    .orderBy(desc(sql`lower(coalesce(${items.sku}, '')) = ${c}`), asc(items.id))
+    .limit(limit);
+}
+
+/** Vị trí có mã / nhãn dán đúng bằng mã (không phân biệt hoa thường). */
+export async function findLocationByCode(code: string) {
+  const userId = await uid();
+  const c = code.trim().toLowerCase();
+  if (!c) return undefined;
+  const [row] = await db
+    .select({ id: locations.id, name: locations.name })
+    .from(locations)
+    .where(and(eq(locations.userId, userId), sql`lower(${locations.code}) = ${c}`))
+    .limit(1);
+  return row;
+}
+
+export async function getLocation(id: number) {
+  if (!Number.isInteger(id) || id <= 0) return undefined;
+  const userId = await uid();
+  const [row] = await db
+    .select({ id: locations.id, name: locations.name })
+    .from(locations)
+    .where(and(eq(locations.id, id), eq(locations.userId, userId)));
+  return row;
 }

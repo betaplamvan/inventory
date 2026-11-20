@@ -5,7 +5,7 @@ import { authIdentities, categories, items, locations, users } from "@/db/schema
 import type { GoogleProfile } from "./google";
 
 /**
- * Đăng nhập bằng hồ sơ OAuth (theo luồng link_or_login_google của okia):
+ * Đăng nhập bằng hồ sơ OAuth:
  *  1. Đã có identity (provider, sub)  → đăng nhập user đó
  *  2. Có user cùng email (email Google đã xác minh) → liên kết identity vào user đó
  *  3. Chưa có → tạo user mới

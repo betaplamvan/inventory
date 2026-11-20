@@ -6,7 +6,7 @@ inputs:
     description: "true → push image lên GHCR"
     default: "false"
   self-hosted:
-    description: "true → chạy trên minisforum: dùng cache layer của Docker trên máy, không dùng cache GHA"
+    description: "true → chạy trên self-hosted runner: dùng cache layer của Docker trên máy, không dùng cache GHA"
     default: "false"
   token:
     description: GITHUB_TOKEN để đăng nhập GHCR

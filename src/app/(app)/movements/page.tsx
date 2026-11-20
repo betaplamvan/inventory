@@ -3,7 +3,7 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { ArrowLeftRight, Search } from "lucide-react";
 import type { MovementType } from "@/db/schema";
-import { MOVEMENT_LABELS } from "@/lib/constants";
+import { MOVEMENT_LABELS, sourceLabel } from "@/lib/constants";
 import { fmtDateTime, fmtMoney, fmtQty } from "@/lib/format";
 import { listMovements } from "@/lib/queries";
 import { EmptyState, ListSkeleton, MovementIcon, PageHeader, Pagination, qs } from "@/components/ui";
@@ -71,6 +71,7 @@ async function Movements({ searchParams }: { searchParams: PageProps<"/movements
                       <p className="line-clamp-2 text-sm font-medium">{item.name}</p>
                       <p className="mt-0.5 text-xs text-muted">
                         {MOVEMENT_LABELS[m.type]} · {fmtDateTime(m.createdAt)}
+                        {sourceLabel(m) && ` · ${sourceLabel(m)}`}
                       </p>
                       {extra && <p className="mt-0.5 line-clamp-2 text-xs text-muted">{extra}</p>}
                     </div>
@@ -125,7 +126,14 @@ async function Movements({ searchParams }: { searchParams: PageProps<"/movements
                           .join(" · ") || "—"}
                       </span>
                     </td>
-                    <td className="px-3 py-2 text-right whitespace-nowrap text-muted">{fmtDateTime(m.createdAt)}</td>
+                    <td className="px-3 py-2 text-right whitespace-nowrap text-muted">
+                      {fmtDateTime(m.createdAt)}
+                      {sourceLabel(m) && (
+                        <span className="ml-auto block max-w-40 truncate text-xs" title={sourceLabel(m) ?? undefined}>
+                          {sourceLabel(m)}
+                        </span>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>

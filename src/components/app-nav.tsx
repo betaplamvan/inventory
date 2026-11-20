@@ -7,19 +7,25 @@ import {
   ArrowLeftRight,
   Boxes,
   Cpu,
+  FileUp,
   FolderTree,
   LayoutDashboard,
   MapPin,
   Menu,
   Plus,
+  ScanLine,
+  Trash2,
 } from "lucide-react";
 
 const LINKS = [
   { href: "/", label: "Tổng quan", icon: LayoutDashboard, exact: true },
   { href: "/items", label: "Kho hàng", icon: Boxes },
   { href: "/movements", label: "Nhập / Xuất", icon: ArrowLeftRight },
+  { href: "/scan", label: "Quét mã", icon: ScanLine },
   { href: "/categories", label: "Danh mục", icon: FolderTree },
   { href: "/locations", label: "Vị trí cất", icon: MapPin },
+  { href: "/import", label: "Nhập từ file", icon: FileUp },
+  { href: "/trash", label: "Thùng rác", icon: Trash2 },
 ];
 
 function Brand() {
@@ -94,9 +100,17 @@ type MobileNavProps = { lowStockBadge: ReactNode; userMenu: ReactNode };
 export function MobileNav(props: MobileNavProps) {
   return (
     <>
-      <header className="border-b border-border bg-surface pt-[env(safe-area-inset-top)] lg:hidden">
-        <div className="flex h-12 items-center px-4">
+      <header className="border-b border-border bg-surface pt-[env(safe-area-inset-top)] lg:hidden print:hidden">
+        <div className="flex h-12 items-center justify-between pr-1.5 pl-4">
           <Brand />
+          <Link
+            href="/scan"
+            aria-label="Quét mã"
+            title="Quét mã"
+            className="grid size-11 place-items-center rounded-lg text-muted active:bg-surface-2"
+          >
+            <ScanLine className="size-5.5" />
+          </Link>
         </div>
       </header>
       <Suspense fallback={<TabBar {...props} pathname={null} />}>
@@ -155,7 +169,7 @@ function TabBar({ lowStockBadge, userMenu, pathname }: MobileNavProps & { pathna
   };
 
   return (
-    <div className="lg:hidden">
+    <div className="lg:hidden print:hidden">
       {open && (
         <div className="fixed inset-0 z-40 bg-black/40" onClick={close}>
           <div

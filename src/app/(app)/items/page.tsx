@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Suspense } from "react";
-import { Download, MapPin, PackageSearch, Plus } from "lucide-react";
+import { Download, FileUp, MapPin, PackageSearch, Plus, QrCode } from "lucide-react";
 import { getCategoryTree, getLocationTree, listItems, type SortKey, type StockFilter } from "@/lib/queries";
 import { fmtMoney } from "@/lib/format";
 import type { ItemKind } from "@/db/schema";
@@ -86,9 +86,17 @@ async function ItemsContent({ searchParams }: { searchParams: PageProps<"/items"
 
       <div className="mb-3 flex items-center gap-2 text-sm text-muted">
         <span className="mr-auto">{total} mặt hàng</span>
-        <a href={`/api/export${filterQs}`} className="btn-ghost btn-sm">
-          <Download className="size-3.5" /> Xuất CSV
+        <Link href="/import" className="btn-ghost btn-sm" title="Nhập từ CSV / Excel">
+          <FileUp className="size-3.5" /> <span className="max-sm:hidden">Nhập</span>
+        </Link>
+        <a href={`/api/export${filterQs}`} className="btn-ghost btn-sm" title="Xuất CSV theo bộ lọc">
+          <Download className="size-3.5" /> <span className="max-sm:hidden">Xuất CSV</span>
         </a>
+        {total > 0 && (
+          <Link href={`/labels${filterQs}`} className="btn-ghost btn-sm" title="In nhãn QR cho các mặt hàng đang lọc">
+            <QrCode className="size-3.5" /> <span className="max-sm:hidden">In nhãn</span>
+          </Link>
+        )}
         <ViewToggle values={values} className="md:hidden" />
       </div>
 

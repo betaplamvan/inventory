@@ -1,4 +1,4 @@
-import type { ItemKind, MovementType } from "@/db/schema";
+import type { ItemKind, MovementSource, MovementType } from "@/db/schema";
 
 export const KIND_LABELS: Record<ItemKind, string> = {
   component: "Linh kiện",
@@ -25,6 +25,15 @@ export const MOVEMENT_LABELS: Record<MovementType, string> = {
   out: "Xuất",
   adjust: "Kiểm kê",
 };
+
+const SOURCE_LABELS: Record<MovementSource, string> = { web: "Web", agent: "Agent", import: "Nhập file" };
+
+/** "Web", "Agent · Claude web", "Nhập file"; null = dữ liệu cũ (trước khi có ghi nguồn) */
+export function sourceLabel(m: { source: MovementSource | null; sourceName: string | null }) {
+  if (!m.source) return null;
+  const base = SOURCE_LABELS[m.source] ?? m.source;
+  return m.sourceName ? `${base} · ${m.sourceName}` : base;
+}
 
 export const UNITS = ["cái", "con", "bộ", "chiếc", "cuộn", "mét", "gram", "hộp", "túi", "tấm", "lọ", "cặp"];
 

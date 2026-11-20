@@ -76,6 +76,18 @@ textarea {
   touch-action: manipulation;
 }
 
+/* In nhãn: nền trắng, bỏ khung điều hướng (các thanh đã có print:hidden) */
+@media print {
+  html,
+  body {
+    background: #fff !important;
+    color: #000;
+  }
+  @page {
+    margin: 6mm;
+  }
+}
+
 @utility input {
   @apply w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground outline-none transition placeholder:text-muted/70 pointer-coarse:min-h-11 pointer-coarse:text-base focus:border-accent focus:ring-2 focus:ring-accent/20 disabled:opacity-60;
 }

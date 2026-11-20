@@ -33,17 +33,20 @@ export async function POST(req: Request) {
     );
   }
 
-  const server = buildMcpServer({ userId: auth.userId, scope: auth.scope, tokenId: auth.tokenId });
+  const server = buildMcpServer({ userId: auth.userId, scope: auth.scope, tokenId: auth.tokenId, tokenName: auth.name });
   const transport = new WebStandardStreamableHTTPServerTransport({
     sessionIdGenerator: undefined, // stateless
     enableJsonResponse: true,
   });
   await server.connect(transport);
   try {
-    return await runAsUser(auth.userId, () =>
-      transport.handleRequest(req, {
-        authInfo: { token: auth.tokenId, clientId: auth.tokenId, scopes: [auth.scope], extra: { userId: auth.userId } },
-      }),
+    return await runAsUser(
+      auth.userId,
+      () =>
+        transport.handleRequest(req, {
+          authInfo: { token: auth.tokenId, clientId: auth.tokenId, scopes: [auth.scope], extra: { userId: auth.userId } },
+        }),
+      { source: "agent", name: auth.name },
     );
   } finally {
     // Response JSON đã được tạo xong (enableJsonResponse) → đóng server của request này

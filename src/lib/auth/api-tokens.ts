@@ -53,7 +53,7 @@ export async function verifyBearer(authorization: string | null) {
   const token = m?.[1];
   if (!token || !token.startsWith(TOKEN_PREFIX) || token.length > 100) return null;
   const [row] = await db
-    .select({ id: apiTokens.id, userId: apiTokens.userId, scope: apiTokens.scope, lastUsedAt: apiTokens.lastUsedAt })
+    .select({ id: apiTokens.id, userId: apiTokens.userId, scope: apiTokens.scope, name: apiTokens.name })
     .from(apiTokens)
     .where(
       and(
@@ -72,5 +72,5 @@ export async function verifyBearer(authorization: string | null) {
         or(isNull(apiTokens.lastUsedAt), sql`${apiTokens.lastUsedAt} < now() - interval '1 minute'`),
       ),
     );
-  return { tokenId: row.id, userId: row.userId, scope: row.scope as TokenScope };
+  return { tokenId: row.id, userId: row.userId, scope: row.scope as TokenScope, name: row.name };
 }

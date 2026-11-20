@@ -2,16 +2,26 @@ import "server-only";
 import { and, eq } from "drizzle-orm";
 import { db, type Tx } from "@/db";
 import { categories, items, locations, stockMovements, type MovementType } from "@/db/schema";
+import { currentVia } from "@/lib/auth/actor";
 import { buildSearchText, type ItemInput } from "@/lib/item-input";
+import { alertOnStockChange } from "@/lib/notify";
+import { liveItemOf } from "./scope";
 
 /**
  * Nghiệp vụ ghi dữ liệu kho, dùng chung cho Server Actions (web) và MCP (agent).
- * Mọi hàm nhận userId và chỉ đụng tới dữ liệu của user đó.
+ * Mọi hàm nhận userId và chỉ đụng tới dữ liệu của user đó (bỏ qua mặt hàng trong thùng rác).
+ * Mỗi dòng lịch sử ghi kèm nguồn thao tác (web / agent + tên token / import) lấy từ currentVia().
  */
 
 export class InventoryError extends Error {}
 
 const round3 = (n: number) => Math.round(n * 1000) / 1000;
+
+/** Cột nguồn thao tác cho 1 dòng lịch sử */
+const sourceCols = () => {
+  const via = currentVia();
+  return { source: via.source, sourceName: via.name ?? null };
+};
 
 export function pgErrorMessage(err: unknown): string {
   if (err instanceof InventoryError) return err.message;
@@ -54,6 +64,7 @@ export async function createItemFor(userId: string, input: ItemInput) {
         balanceAfter: data.quantity,
         unitPrice: data.unitPrice,
         note: "Tồn kho ban đầu",
+        ...sourceCols(),
       });
     }
     return row.id;
@@ -63,11 +74,11 @@ export async function createItemFor(userId: string, input: ItemInput) {
 /** Cập nhật toàn bộ thông tin; nếu số lượng đổi thì ghi một lần kiểm kê. */
 export async function updateItemFor(userId: string, id: number, input: ItemInput, adjustNote = "Sửa trực tiếp trong form") {
   const data = { ...input, ...(await ownedRefs(userId, input)) };
-  await db.transaction(async (tx) => {
+  const before = await db.transaction(async (tx) => {
     const [current] = await tx
-      .select({ quantity: items.quantity })
+      .select({ quantity: items.quantity, minQuantity: items.minQuantity })
       .from(items)
-      .where(and(eq(items.id, id), eq(items.userId, userId)))
+      .where(and(eq(items.id, id), liveItemOf(userId)))
       .for("update");
     if (!current) throw new InventoryError("Không tìm thấy mặt hàng");
 
@@ -84,18 +95,21 @@ export async function updateItemFor(userId: string, id: number, input: ItemInput
         delta,
         balanceAfter: data.quantity,
         note: adjustNote,
+        ...sourceCols(),
       });
     }
+    return current;
   });
+  alertOnStockChange(userId, id, before, data);
 }
 
 export type MovementExtra = { note?: string | null; reference?: string | null; unitPrice?: number | null };
 
 async function applyMovement(tx: Tx, userId: string, itemId: number, type: MovementType, amount: number, extra: MovementExtra) {
   const [current] = await tx
-    .select({ quantity: items.quantity })
+    .select({ quantity: items.quantity, minQuantity: items.minQuantity })
     .from(items)
-    .where(and(eq(items.id, itemId), eq(items.userId, userId)))
+    .where(and(eq(items.id, itemId), liveItemOf(userId)))
     .for("update");
   if (!current) throw new InventoryError("Không tìm thấy mặt hàng");
 
@@ -126,12 +140,13 @@ async function applyMovement(tx: Tx, userId: string, itemId: number, type: Movem
     unitPrice: extra.unitPrice ?? null,
     reference: extra.reference || null,
     note: extra.note || null,
+    ...sourceCols(),
   });
-  return { delta, balance };
+  return { delta, balance, before: current };
 }
 
 /** Nhập / xuất / kiểm kê. Trả về thay đổi và tồn kho mới. */
-export function recordMovementFor(
+export async function recordMovementFor(
   userId: string,
   itemId: number,
   type: MovementType,
@@ -139,7 +154,9 @@ export function recordMovementFor(
   extra: MovementExtra = {},
 ) {
   if (!Number.isFinite(amount) || amount < 0) throw new InventoryError("Số lượng không hợp lệ");
-  return db.transaction((tx) => applyMovement(tx, userId, itemId, type, amount, extra));
+  const { delta, balance, before } = await db.transaction((tx) => applyMovement(tx, userId, itemId, type, amount, extra));
+  alertOnStockChange(userId, itemId, before, { quantity: balance, minQuantity: before.minQuantity });
+  return { delta, balance };
 }
 
 /* ---------------- Danh mục / vị trí ---------------- */

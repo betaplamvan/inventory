@@ -5,7 +5,7 @@ import { loginWithProfile } from "@/lib/auth/accounts";
 import { createSession } from "@/lib/auth/session";
 
 /**
- * Đăng nhập thử không qua Google (giống dev-login của okia) — chỉ khi ALLOW_DEV_LOGIN=true
+ * Đăng nhập thử không qua Google — chỉ khi ALLOW_DEV_LOGIN=true
  * và không chạy production. Đi đúng luồng tạo/gộp tài khoản như Google với subject "dev:<email>".
  *   POST /api/auth/dev-login  (form: email)
  */

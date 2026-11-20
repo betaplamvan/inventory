@@ -10,8 +10,8 @@ import { runAsUser } from "@/lib/auth/actor";
 import { appBaseUrl } from "@/lib/auth/constants";
 import type { TokenScope } from "@/lib/auth/api-tokens";
 import { ITEM_KINDS, KIND_LABELS, MOVEMENT_LABELS } from "@/lib/constants";
-import { normalizeText } from "@/lib/format";
 import { itemSchema, type ItemInput } from "@/lib/item-input";
+import { importRows, type ImportRow } from "@/lib/inventory/import";
 import {
   InventoryError,
   createCategoryFor,
@@ -21,6 +21,9 @@ import {
   recordMovementFor,
   updateItemFor,
 } from "@/lib/inventory/mutations";
+import { resolveRef } from "@/lib/inventory/refs";
+import { liveItemOf } from "@/lib/inventory/scope";
+import { TRASH_DAYS, listTrashFor, restoreItemFor, trashItemFor } from "@/lib/inventory/trash";
 import {
   getCategoryTree,
   getDashboard,
@@ -36,7 +39,10 @@ import { UPLOAD_LINK_MAX_FILES, UPLOAD_LINK_MAX_MINUTES, createUploadLink } from
 import { MEDIA_LINK_DAYS, createMediaLink } from "@/lib/inventory/media-links";
 import { getObject } from "@/lib/storage";
 
-export type McpAuth = { userId: string; scope: TokenScope; tokenId?: string };
+export type McpAuth = { userId: string; scope: TokenScope; tokenId?: string; tokenName?: string };
+
+/** import_items: số dòng tối đa mỗi lần gọi */
+const MAX_IMPORT_TOOL_ROWS = 100;
 
 /** get_item_images: số ảnh tối đa được cấp URL trong một lần gọi */
 const MAX_IMAGE_URLS = 20;
@@ -55,70 +61,6 @@ const itemUrl = (id: number) => `${appBaseUrl()}/items/${id}`;
 const refSchema = z
   .union([z.number().int().positive(), z.string().min(1)])
   .describe('id (số) hoặc tên / đường dẫn, ví dụ "Tụ gốm" hoặc "Tụ điện > Tụ gốm"');
-
-type Tree = { id: number; name: string; parentId: number | null; path: string }[];
-
-const splitPath = (s: string) =>
-  s
-    .split(/\s*(?:›|>|\/)\s*/)
-    .map((p) => p.trim())
-    .filter(Boolean);
-
-async function resolveRef(
-  kind: "category" | "location",
-  ref: number | string | null | undefined,
-  userId: string,
-  createMissing: boolean,
-): Promise<number | null> {
-  if (ref == null || ref === "") return null;
-  const tree: Tree = kind === "category" ? await getCategoryTree() : await getLocationTree();
-  const label = kind === "category" ? "danh mục" : "vị trí";
-
-  if (typeof ref === "number") {
-    if (!tree.some((n) => n.id === ref)) throw new InventoryError(`Không có ${label} id=${ref}`);
-    return ref;
-  }
-
-  const wanted = splitPath(ref).map(normalizeText);
-  const wantedPath = wanted.join(" > ");
-  const byPath = tree.filter((n) => splitPath(n.path).map(normalizeText).join(" > ") === wantedPath);
-  if (byPath.length === 1) return byPath[0].id;
-
-  if (wanted.length === 1) {
-    const byName = tree.filter((n) => normalizeText(n.name) === wanted[0]);
-    if (byName.length === 1) return byName[0].id;
-    if (byName.length > 1) {
-      throw new InventoryError(
-        `Tên ${label} "${ref}" bị trùng, hãy dùng id hoặc đường dẫn đầy đủ: ${byName.map((n) => `${n.id}: ${n.path}`).join("; ")}`,
-      );
-    }
-  }
-
-  if (!createMissing) {
-    throw new InventoryError(
-      `Không tìm thấy ${label} "${ref}". Gọi list_${kind === "category" ? "categories" : "locations"} để xem danh sách, ` +
-        `hoặc truyền createMissing=true để tự tạo.`,
-    );
-  }
-
-  // Tạo lần lượt từng cấp của đường dẫn còn thiếu
-  const parts = splitPath(ref);
-  let parentId: number | null = null;
-  let current = tree;
-  for (const part of parts) {
-    const found = current.find((n) => n.parentId === parentId && normalizeText(n.name) === normalizeText(part));
-    if (found) {
-      parentId = found.id;
-      continue;
-    }
-    parentId =
-      kind === "category"
-        ? await createCategoryFor(userId, { name: part, parentId })
-        : await createLocationFor(userId, { name: part, parentId });
-    current = kind === "category" ? await getCategoryTree() : await getLocationTree();
-  }
-  return parentId;
-}
 
 /* ------------------------------------------------------------------ */
 /* Schema trường mặt hàng                                              */
@@ -151,6 +93,9 @@ const itemFields = {
   datasheetUrl: z.string().url().nullish().describe("Link datasheet"),
   notes: z.string().max(10000).nullish(),
 };
+
+/** Trường của 1 dòng trong import_items: như itemFields, trừ createMissing (là tuỳ chọn chung của cả lần nhập) */
+const { createMissing: _createMissing, ...importFields } = itemFields;
 
 function summarizeItem(it: {
   id: number;
@@ -188,12 +133,16 @@ async function findItemId(userId: string, ref: { id?: number; sku?: string }) {
     const [row] = await db
       .select({ id: items.id })
       .from(items)
-      .where(and(eq(items.userId, userId), eq(items.sku, ref.sku)));
+      .where(and(liveItemOf(userId), eq(items.sku, ref.sku)));
     if (!row) throw new InventoryError(`Không có mặt hàng SKU "${ref.sku}"`);
     return row.id;
   }
   throw new InventoryError("Cần truyền id hoặc sku");
 }
+
+/** Nguồn của một dòng lịch sử: "web", "agent: <tên token>", "import"; null = dữ liệu cũ */
+const sourceOf = (m: { source: string | null; sourceName: string | null }) =>
+  m.source ? (m.sourceName ? `${m.source}: ${m.sourceName}` : m.source) : null;
 
 function validateItem(data: unknown): ItemInput {
   const parsed = itemSchema.safeParse(data);
@@ -218,7 +167,9 @@ export function buildMcpServer(auth: McpAuth) {
         "Tìm trước bằng search_items để tránh tạo trùng. Thay đổi số lượng bằng record_movement " +
         "(in = nhập thêm, out = lấy ra dùng, adjust = đặt số lượng thực tế khi kiểm kê) để có lịch sử. " +
         "Tiền tệ là VNĐ. Danh mục / vị trí có thể truyền bằng tên, ví dụ \"Tụ điện > Tụ gốm\". " +
-        "Gắn ảnh / file: gọi create_upload_url lấy link rồi POST file thẳng lên bằng curl (file không đi qua model).",
+        "Gắn ảnh / file: gọi create_upload_url lấy link rồi POST file thẳng lên bằng curl (file không đi qua model). " +
+        "Thêm nhiều mặt hàng một lúc (cả đơn hàng, bảng kê) thì dùng import_items thay vì gọi create_item nhiều lần. " +
+        `delete_item chỉ chuyển vào thùng rác (khôi phục bằng restore_item trong ${TRASH_DAYS} ngày); xoá hẳn chỉ làm được trên web.`,
     },
   );
 
@@ -228,7 +179,8 @@ export function buildMcpServer(auth: McpAuth) {
     async (args: A): Promise<CallToolResult> => {
       if (write && auth.scope !== "write") return fail("Token này chỉ có quyền đọc (scope=read).");
       try {
-        const result = await runAsUser(auth.userId, () => fn(args));
+        // via: lịch sử nhập/xuất ghi rõ thao tác do agent nào (tên token / kết nối OAuth) thực hiện
+        const result = await runAsUser(auth.userId, () => fn(args), { source: "agent", name: auth.tokenName });
         if (write) revalidatePath("/", "layout");
         return result;
       } catch (err) {
@@ -365,6 +317,7 @@ export function buildMcpServer(auth: McpAuth) {
           unitPrice: m.unitPrice,
           reference: m.reference,
           note: m.note,
+          source: sourceOf(m),
           at: m.createdAt,
         })),
         createdAt: it.createdAt,
@@ -482,7 +435,9 @@ export function buildMcpServer(auth: McpAuth) {
     "list_movements",
     {
       title: "Lịch sử nhập / xuất",
-      description: "Lịch sử thay đổi số lượng, mới nhất trước. Lọc theo mặt hàng, loại, hoặc từ khoá (tên hàng, dự án, ghi chú).",
+      description:
+        "Lịch sử thay đổi số lượng, mới nhất trước. Lọc theo mặt hàng, loại, hoặc từ khoá (tên hàng, dự án, ghi chú). " +
+        "source cho biết thao tác đến từ đâu: web, agent: <tên token>, import (CSV).",
       inputSchema: {
         itemId: z.number().int().positive().optional(),
         type: z.enum(["in", "out", "adjust"]).optional(),
@@ -495,7 +450,7 @@ export function buildMcpServer(auth: McpAuth) {
       const limit = a.limit ?? 20;
       if (a.itemId) {
         const rows = await getItemMovements(a.itemId, limit);
-        return json(rows.map((m) => ({ itemId: a.itemId, type: m.type, delta: m.delta, balanceAfter: m.balanceAfter, reference: m.reference, note: m.note, at: m.createdAt })));
+        return json(rows.map((m) => ({ itemId: a.itemId, type: m.type, delta: m.delta, balanceAfter: m.balanceAfter, reference: m.reference, note: m.note, source: sourceOf(m), at: m.createdAt })));
       }
       const res = await listMovements({ type: a.type, q: a.query });
       return json(
@@ -508,6 +463,7 @@ export function buildMcpServer(auth: McpAuth) {
           balanceAfter: m.balanceAfter,
           reference: m.reference,
           note: m.note,
+          source: sourceOf(m),
           at: m.createdAt,
         })),
       );
@@ -641,6 +597,131 @@ export function buildMcpServer(auth: McpAuth) {
       });
       const it = await getItem(id);
       return json({ ok: true, itemId: id, name: it?.name, type: a.type, delta, quantity: balance, unit: it?.unit });
+    }),
+  );
+
+
+  server.registerTool(
+    "import_items",
+    {
+      title: "Nhập nhiều mặt hàng",
+      description:
+        `Thêm / cập nhật nhiều mặt hàng trong một lần gọi (tối đa ${MAX_IMPORT_TOOL_ROWS} dòng) — dùng cho cả đơn hàng, bảng kê, BOM. ` +
+        "Mỗi dòng: có id hoặc sku trùng mặt hàng đang có → cập nhật (chỉ các trường được truyền; quantity là số lượng thực tế, " +
+        "ghi thành kiểm kê); không khớp → thêm mới (cần name). Dòng lỗi không chặn các dòng khác. " +
+        "Nên gọi dryRun=true trước để xem sẽ thêm / sửa gì.",
+      inputSchema: {
+        items: z
+          .array(
+            z.object({
+              id: z.number().int().positive().optional().describe("id mặt hàng đang có (để cập nhật)"),
+              name: z.string().min(1).max(300).optional(),
+              quantity: z.number().min(0).optional(),
+              ...importFields,
+            }),
+          )
+          .min(1)
+          .max(MAX_IMPORT_TOOL_ROWS),
+        onExisting: z
+          .enum(["update", "skip"])
+          .optional()
+          .describe("Dòng khớp mặt hàng đang có: update = cập nhật (mặc định), skip = bỏ qua"),
+        createMissing: z.boolean().optional().describe("true → tự tạo danh mục / vị trí chưa có"),
+        dryRun: z.boolean().optional().describe("true → chỉ kiểm tra, không ghi gì"),
+      },
+      annotations: writeHint,
+    },
+    run(true, async (a: { items: Omit<ImportRow, "line">[]; onExisting?: "update" | "skip"; createMissing?: boolean; dryRun?: boolean }) => {
+      const res = await importRows(
+        auth.userId,
+        a.items.map((it, i) => ({ ...it, line: i + 1 })),
+        {
+          onExisting: a.onExisting ?? "update",
+          createMissing: !!a.createMissing,
+          dryRun: !!a.dryRun,
+          adjustNote: "Nhập hàng loạt qua agent (MCP)",
+        },
+      );
+      return json({
+        dryRun: !!a.dryRun,
+        created: res.created,
+        updated: res.updated,
+        skipped: res.skipped,
+        failed: res.failed,
+        rows: res.rows.map((r) => ({
+          row: r.line,
+          action: r.action,
+          id: r.id,
+          name: r.name,
+          sku: r.sku,
+          quantity: r.quantity,
+          messages: r.messages.length ? r.messages : undefined,
+          url: r.id && !a.dryRun ? itemUrl(r.id) : undefined,
+        })),
+      });
+    }),
+  );
+
+  server.registerTool(
+    "delete_item",
+    {
+      title: "Xoá mặt hàng (vào thùng rác)",
+      description:
+        `Chuyển mặt hàng vào thùng rác: ẩn khỏi kho nhưng giữ nguyên ảnh và lịch sử, khôi phục được bằng restore_item trong ${TRASH_DAYS} ngày ` +
+        "(sau đó tự xoá hẳn). Chỉ dùng khi người dùng yêu cầu xoá; hết hàng thì không cần xoá.",
+      inputSchema: {
+        id: z.number().int().positive().optional(),
+        sku: z.string().optional(),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
+    },
+    run(true, async (a: { id?: number; sku?: string }) => {
+      const id = await findItemId(auth.userId, a);
+      const row = await trashItemFor(auth.userId, id);
+      return json({ deleted: true, id: row.id, name: row.name, restoreWith: "restore_item", keptDays: TRASH_DAYS });
+    }),
+  );
+
+  server.registerTool(
+    "list_trash",
+    {
+      title: "Xem thùng rác",
+      description: "Các mặt hàng đã xoá còn khôi phục được (mới xoá trước), kèm ai xoá và khi nào.",
+      annotations: readOnly,
+    },
+    run(false, async () => {
+      const rows = await listTrashFor(auth.userId);
+      return json(
+        rows.map((r) => ({
+          id: r.id,
+          name: r.name,
+          sku: r.sku,
+          quantity: r.quantity,
+          unit: r.unit,
+          deletedAt: r.deletedAt,
+          deletedBy: r.deletedBy,
+        })),
+      );
+    }),
+  );
+
+  server.registerTool(
+    "restore_item",
+    {
+      title: "Khôi phục mặt hàng",
+      description: "Đưa mặt hàng từ thùng rác trở lại kho (lấy id từ list_trash).",
+      inputSchema: { id: z.number().int().positive() },
+      annotations: writeHint,
+    },
+    run(true, async (a: { id: number }) => {
+      const res = await restoreItemFor(auth.userId, a.id);
+      return json({
+        restored: true,
+        id: res.id,
+        name: res.name,
+        url: itemUrl(res.id),
+        warning: res.skuCleared ? `SKU "${res.skuCleared}" đang được mặt hàng khác dùng nên đã bỏ trống` : undefined,
+      });
     }),
   );
 

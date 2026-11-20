@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
-import { ChevronLeft, ChevronRight, Download, FileText, Play, Star, Trash2, Upload, X } from "lucide-react";
+import { Camera, ChevronLeft, ChevronRight, Download, FileText, Play, Star, Trash2, Upload, X } from "lucide-react";
 import { deleteMedia, setCover } from "@/actions/items";
 import type { Media } from "@/db/schema";
 import { fmtBytes } from "@/lib/format";
@@ -120,6 +120,21 @@ export function MediaGallery({ itemId, media, coverId }: { itemId: number; media
         </ul>
       )}
 
+      {/* Điện thoại: nút chụp thẳng bằng camera sau (không qua thư viện ảnh) */}
+      <label className="btn-secondary w-full cursor-pointer can-hover:hidden">
+        <Camera className="size-4" /> Chụp ảnh
+        <input
+          type="file"
+          accept="image/*"
+          capture="environment"
+          className="hidden"
+          onChange={(e) => {
+            upload(Array.from(e.target.files ?? []));
+            e.target.value = "";
+          }}
+        />
+      </label>
+
       <label
         onDragOver={(e) => {
           e.preventDefault();
@@ -136,7 +151,7 @@ export function MediaGallery({ itemId, media, coverId }: { itemId: number; media
         }`}
       >
         <Upload className="size-4 shrink-0" />
-        <span className="can-hover:hidden">Chụp / chọn ảnh, video, datasheet</span>
+        <span className="can-hover:hidden">Chọn ảnh, video, datasheet</span>
         <span className="hidden can-hover:inline">Thêm ảnh / video / datasheet (kéo thả hoặc bấm để chọn)</span>
         <input
           type="file"

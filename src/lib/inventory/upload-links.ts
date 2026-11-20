@@ -5,6 +5,7 @@ import { apiTokens, items, uploadLinks } from "@/db/schema";
 import { appBaseUrl } from "@/lib/auth/constants";
 import { randomToken, sha256 } from "@/lib/auth/crypto";
 import { InventoryError } from "./mutations";
+import { liveItemOf } from "./scope";
 
 /**
  * Link upload ngắn hạn: agent xin link qua MCP (create_upload_url) rồi POST file thẳng lên bằng curl.
@@ -25,7 +26,7 @@ export async function createUploadLink(opts: {
   const [item] = await db
     .select({ id: items.id, name: items.name })
     .from(items)
-    .where(and(eq(items.id, opts.itemId), eq(items.userId, opts.userId)));
+    .where(and(eq(items.id, opts.itemId), liveItemOf(opts.userId)));
   if (!item) throw new InventoryError(`Không có mặt hàng id=${opts.itemId}`);
 
   // Dọn link đã hết hạn của user này

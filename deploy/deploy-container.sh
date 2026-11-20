@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # Thay container bằng image mới, chờ healthcheck; lỗi thì chạy lại image cũ. Dùng trong job deploy
-# (runner minisforum) của .github/workflows/ci-cd.yml (lấy từ okia). Postgres/MinIO KHÔNG do script này quản lý.
+# (self-hosted runner) của .github/workflows/ci-cd.yml. Postgres/MinIO KHÔNG do script này quản lý.
 #
 # Biến môi trường:
 #   NAME            tên container (inventory)
-#   IMAGE           image đầy đủ kèm tag, ví dụ ghcr.io/betaplamvan/inventory:<sha>
+#   IMAGE           image đầy đủ kèm tag, ví dụ ghcr.io/<owner>/inventory:<sha>
 #   PORT_MAP        ánh xạ cổng cho `docker run -p`, ví dụ 3000:3000 hoặc 127.0.0.1:8000:8000
 #   NETWORK         docker network để container thấy Postgres/Redis (tạo nếu chưa có)
 #   PASS_ENV        (tùy chọn) danh sách tên biến cách nhau bởi khoảng trắng, chuyển vào container

@@ -8,6 +8,7 @@ import { db } from "@/db";
 import { items, media, type Media } from "@/db/schema";
 import { putObject } from "@/lib/storage";
 import { InventoryError } from "./mutations";
+import { liveItemOf } from "./scope";
 
 /**
  * Lưu ảnh / video / tài liệu của mặt hàng lên MinIO + ghi bản ghi media.
@@ -38,7 +39,7 @@ export async function addItemMediaFor(userId: string, itemId: number, input: Add
   const [item] = await db
     .select({ id: items.id, cover: items.coverMediaId })
     .from(items)
-    .where(and(eq(items.id, itemId), eq(items.userId, userId)));
+    .where(and(eq(items.id, itemId), liveItemOf(userId)));
   if (!item) throw new InventoryError(`Không có mặt hàng id=${itemId}`);
 
   const filename = (input.filename || "file").slice(0, 255);

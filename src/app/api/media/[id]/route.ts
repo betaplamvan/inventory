@@ -6,6 +6,7 @@ import { items, media } from "@/db/schema";
 import { getObject, statObject } from "@/lib/storage";
 import { getCurrentUser } from "@/lib/auth/session";
 import { resolveMediaLink } from "@/lib/inventory/media-links";
+import { liveItem } from "@/lib/inventory/scope";
 
 /**
  * Stream file từ MinIO qua Next (không cần public MinIO ra ngoài).
@@ -29,14 +30,15 @@ export async function GET(req: NextRequest, ctx: RouteContext<"/api/media/[id]">
     return new NextResponse(linkToken ? "Link ảnh sai hoặc đã hết hạn" : "Unauthorized", { status: 401 });
   }
 
-  // Chỉ chủ của mặt hàng (hoặc người giữ link xem của mặt hàng đó) mới xem được file
+  // Chỉ chủ của mặt hàng (hoặc người giữ link xem của mặt hàng đó) mới xem được file.
+  // Chủ kho vẫn xem được ảnh của món trong thùng rác (trang Thùng rác); link xem thì không.
   const [row] = await db
     .select({ m: media })
     .from(media)
     .innerJoin(items, eq(items.id, media.itemId))
     .where(
       link
-        ? and(eq(media.id, mediaId), eq(media.kind, "image"), eq(items.id, link.itemId), eq(items.userId, link.userId))
+        ? and(eq(media.id, mediaId), eq(media.kind, "image"), eq(items.id, link.itemId), eq(items.userId, link.userId), liveItem)
         : and(eq(media.id, mediaId), eq(items.userId, me!.id)),
     );
   const m = row?.m;

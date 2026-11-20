@@ -1,21 +1,21 @@
-# CI/CD: GitHub Actions, deploy lên minisforum
+# CI/CD: GitHub Actions, deploy lên máy chủ riêng
 
-Theo đúng mô hình của okia, workflow [`ci-cd.yml`](../.github/workflows/ci-cd.yml) chạy như sau:
+Workflow [`ci-cd.yml`](../.github/workflows/ci-cd.yml) chạy như sau:
 
 ```
 push main ─► Build (GitHub, ubuntu-latest) ──thành công──────────────┐
-                 │ không nhận được runner (hết quota)                ├─► Deploy (minisforum)
-                 └─► Build (minisforum, dự phòng) ──thành công───────┘
+                 │ không nhận được runner (hết quota)                ├─► Deploy (self-hosted)
+                 └─► Build (self-hosted, dự phòng) ──thành công───────┘
 pull_request ─► chỉ Build (lint + typecheck + build image), không push, không deploy
 ```
 
 Commit chỉ sửa file `*.md` thì không chạy gì.
 
-- **Build** gồm `npm ci`, lint, typecheck, build image Docker rồi push lên GHCR `ghcr.io/betaplamvan/inventory` với tag `<sha>` và `latest`. Các bước dùng chung nằm trong composite action [`app-ci`](../.github/actions/app-ci/action.yml).
+- **Build** gồm `npm ci`, lint, typecheck, build image Docker rồi push lên GHCR `ghcr.io/<owner>/inventory` với tag `<sha>` và `latest`. Các bước dùng chung nằm trong composite action [`app-ci`](../.github/actions/app-ci/action.yml).
 - **Dự phòng** chỉ chạy khi job GitHub *chưa chạy được bước nào* (hết phút, chạm spending limit). Lỗi code thật thì không build lại.
   - Biến repo `CI_RUNNER=minisforum` bỏ hẳn job GitHub; `CI_RUNNER=github` tắt dự phòng.
   - Chạy tay: Actions → CI/CD → *Run workflow* → chọn `runner`.
-- **Deploy** dùng [`deploy-container.sh`](deploy-container.sh), chép từ okia:
+- **Deploy** dùng [`deploy-container.sh`](deploy-container.sh):
   - pull image theo sha, thay container `inventory`, chờ healthcheck `/api/health` (kiểm tra cả kết nối Postgres);
   - không healthy thì **chạy lại image cũ** và báo đỏ;
   - giữ 3 image gần nhất trên máy và 10 bản trên GHCR;
@@ -24,13 +24,13 @@ Commit chỉ sửa file `*.md` thì không chạy gì.
 
 ## Chuẩn bị (một lần)
 
-1. **Runner:** dùng runner cấp org `betaplamvan` có label `minisforum`. Nếu job deploy đứng ở trạng thái *Queued*, vào Org → Settings → Actions → Runner groups và cho repo `inventory` dùng group chứa runner.
-2. **Postgres / MinIO** trên minisforum (đã làm, 2026-11-18):
+1. **Runner:** một self-hosted runner (cấp repo hoặc org) có label `minisforum` (đổi label thì sửa cả `ci-cd.yml` và `.github/actionlint.yaml`). Nếu job deploy đứng ở trạng thái *Queued*, vào Org → Settings → Actions → Runner groups và cho repo `inventory` dùng group chứa runner.
+2. **Postgres / MinIO** trên máy chủ:
    - Postgres: role `inventory` là chủ DB `inventory`; các role khác (trừ superuser) không kết nối được vào DB này. Migration tự chạy bằng role này.
    - MinIO: user `inventory-app` gắn policy `inventory-rw`, chỉ đọc/ghi/xoá trong `inventory-bucket` và không tạo được bucket khác.
    - Container app chạy trong network `local-services` (`DOCKER_NETWORK`), cùng network với container `postgres` và `minio`, nên gọi `postgres:5432` và `minio:9000` theo tên.
-3. **Cloudflare Tunnel:** `inventory.nguyenducquan.io.vn` trỏ tới `http://localhost:3040` (đã làm).
-4. **Google OAuth:** thêm `https://inventory.nguyenducquan.io.vn/api/auth/google/callback` vào *Authorized redirect URIs* của OAuth client.
+3. **Tên miền HTTPS** (Cloudflare Tunnel, reverse proxy…) trỏ tới `http://localhost:3040`.
+4. **Google OAuth:** thêm `<APP_BASE_URL>/api/auth/google/callback` vào *Authorized redirect URIs* của OAuth client.
 
 ## Bí mật: file local là nguồn gốc
 

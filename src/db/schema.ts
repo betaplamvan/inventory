@@ -1,6 +1,7 @@
 import {
   type AnyPgColumn,
   bigint,
+  boolean,
   index,
   integer,
   jsonb,
@@ -14,7 +15,7 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
-import { relations } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 
 export const itemKind = pgEnum("item_kind", [
   "component", // Linh kiện
@@ -26,6 +27,7 @@ export const itemKind = pgEnum("item_kind", [
 ]);
 
 export const movementType = pgEnum("movement_type", ["in", "out", "adjust"]);
+export type MovementSource = "web" | "agent" | "import";
 export const mediaKind = pgEnum("media_kind", ["image", "video", "file"]);
 
 const timestamps = {
@@ -50,7 +52,7 @@ export const users = pgTable("users", {
   ...timestamps,
 });
 
-/** Cách đăng nhập gắn với user (như okia): provider "google" + subject = Google `sub`. */
+/** Cách đăng nhập gắn với user: provider "google" + subject = Google `sub`. */
 export const authIdentities = pgTable(
   "auth_identities",
   {
@@ -260,10 +262,15 @@ export const items = pgTable(
     searchText: text("search_text").notNull().default(""),
     ...timestamps,
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+    /** Thùng rác (xoá mềm): khác null = đã xoá, ẩn khỏi mọi danh sách, tự xoá hẳn sau TRASH_DAYS ngày */
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+    /** Ai xoá: "web" hoặc "agent: <tên token>" */
+    deletedBy: text("deleted_by"),
   },
   (t) => [
     index("items_user_idx").on(t.userId),
-    uniqueIndex("items_user_sku_uq").on(t.userId, t.sku),
+    // SKU chỉ cần không trùng giữa các mặt hàng đang dùng — món trong thùng rác không giữ chỗ
+    uniqueIndex("items_user_sku_uq").on(t.userId, t.sku).where(sql`deleted_at is null`),
     index("items_category_idx").on(t.categoryId),
     index("items_location_idx").on(t.locationId),
     index("items_kind_idx").on(t.kind),
@@ -304,10 +311,32 @@ export const stockMovements = pgTable(
     /** Dự án / đơn hàng / nguồn gốc */
     reference: text("reference"),
     note: text("note"),
+    /** Thao tác đến từ đâu: "web" | "agent" (MCP) | "import" (CSV). null = dữ liệu cũ, không rõ */
+    source: text("source").$type<MovementSource>(),
+    /** Tên API token / kết nối OAuth đã thực hiện (lưu lại tên vì token có thể bị thu hồi) */
+    sourceName: text("source_name"),
     ...timestamps,
   },
   (t) => [index("movements_item_idx").on(t.itemId), index("movements_created_idx").on(t.createdAt)],
 );
+
+/**
+ * Cài đặt thông báo "sắp hết hàng" của từng tài khoản.
+ * Telegram: người dùng bấm link t.me/<bot>?start=<mã> → app đọc getUpdates, khớp mã (DB chỉ lưu SHA-256) rồi lưu chat id.
+ */
+export const notifySettings = pgTable("notify_settings", {
+  userId: uuid("user_id")
+    .primaryKey()
+    .references(() => users.id, { onDelete: "cascade" }),
+  telegramChatId: text("telegram_chat_id"),
+  /** Tên hiển thị của chat đã kết nối (@username hoặc tên) */
+  telegramName: text("telegram_name"),
+  linkCodeHash: text("link_code_hash").unique(),
+  linkCodeExpiresAt: timestamp("link_code_expires_at", { withTimezone: true }),
+  /** Gửi email tới địa chỉ Google của tài khoản */
+  emailEnabled: boolean("email_enabled").notNull().default(false),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
 
 export const categoriesRelations = relations(categories, ({ one, many }) => ({
   parent: one(categories, {
@@ -372,3 +401,4 @@ export type Media = typeof media.$inferSelect;
 export type StockMovement = typeof stockMovements.$inferSelect;
 export type ItemKind = (typeof itemKind.enumValues)[number];
 export type MovementType = (typeof movementType.enumValues)[number];
+export type NotifySettings = typeof notifySettings.$inferSelect;

@@ -4,6 +4,7 @@ import { ArrowDownLeft, ArrowUpRight, Cpu, Film, FileText, RefreshCw } from "luc
 import type { ItemKind, Media } from "@/db/schema";
 import { KIND_COLORS, KIND_LABELS } from "@/lib/constants";
 import { fmtQty } from "@/lib/format";
+import { stockState } from "@/lib/stock";
 
 export function PageHeader({
   title,
@@ -36,11 +37,7 @@ export function KindBadge({ kind }: { kind: ItemKind }) {
   );
 }
 
-export function stockState(quantity: number, minQuantity: number) {
-  if (quantity <= 0) return "out" as const;
-  if (minQuantity > 0 && quantity <= minQuantity) return "low" as const;
-  return "ok" as const;
-}
+export { stockState } from "@/lib/stock";
 
 export function StockQty({
   quantity,

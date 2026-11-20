@@ -1,13 +1,14 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
-import { ChevronLeft, Copy, ExternalLink, FileText, MapPin, Pencil, ShoppingCart, Trash2 } from "lucide-react";
+import { ChevronLeft, Copy, ExternalLink, FileText, MapPin, Pencil, QrCode, ShoppingCart, Trash2 } from "lucide-react";
 import { deleteItem, deleteMovement, duplicateItem } from "@/actions/items";
 import { ConfirmButton } from "@/components/confirm-button";
 import { MediaGallery } from "@/components/media-gallery";
 import { MovementForm } from "@/components/movement-form";
 import { KindBadge, MovementIcon, Skeleton, StockQty, StockStateBadge } from "@/components/ui";
-import { MOVEMENT_LABELS } from "@/lib/constants";
+import { MOVEMENT_LABELS, sourceLabel } from "@/lib/constants";
+import { TRASH_DAYS } from "@/lib/inventory/trash";
 import { fmtDateTime, fmtMoney, fmtQty } from "@/lib/format";
 import { getCategoryTree, getItem, getItemMovements, getLocationTree } from "@/lib/queries";
 
@@ -31,14 +32,22 @@ export default function ItemPage(props: PageProps<"/items/[id]">) {
           </div>
         }
       >
-        <ItemDetail params={props.params} />
+        <ItemDetail params={props.params} searchParams={props.searchParams} />
       </Suspense>
     </>
   );
 }
 
-async function ItemDetail({ params }: { params: PageProps<"/items/[id]">["params"] }) {
-  const { id } = await params;
+async function ItemDetail({
+  params,
+  searchParams,
+}: {
+  params: PageProps<"/items/[id]">["params"];
+  searchParams: PageProps<"/items/[id]">["searchParams"];
+}) {
+  const [{ id }, sp] = await Promise.all([params, searchParams]);
+  const restored = sp.restored === "1";
+  const skuCleared = typeof sp.skuCleared === "string" ? sp.skuCleared : null;
   const itemId = Number(id);
   const [item, movements, categories, locations] = await Promise.all([
     getItem(itemId),
@@ -62,6 +71,12 @@ async function ItemDetail({ params }: { params: PageProps<"/items/[id]">["params
 
   return (
     <>
+      {restored && (
+        <div className="mb-4 rounded-lg border border-accent/30 bg-accent-soft px-4 py-3 text-sm text-accent-strong">
+          Đã khôi phục từ thùng rác.
+          {skuCleared && ` SKU "${skuCleared}" đang được mặt hàng khác dùng nên đã bỏ trống — sửa lại nếu cần.`}
+        </div>
+      )}
       <div className="mb-4 flex flex-wrap items-start justify-between gap-3 sm:mb-6">
         <div className="min-w-0">
           <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">{item.name}</h1>
@@ -75,19 +90,30 @@ async function ItemDetail({ params }: { params: PageProps<"/items/[id]">["params
             )}
           </div>
         </div>
-        <div className="grid w-full grid-cols-3 gap-2 sm:flex sm:w-auto sm:flex-wrap">
-          <Link href={`/items/${item.id}/edit`} className="btn-secondary">
+        {/* Điện thoại: 4 nút một hàng, icon nằm trên chữ */}
+        <div className="grid w-full grid-cols-4 gap-2 sm:flex sm:w-auto sm:flex-wrap">
+          <Link href={`/items/${item.id}/edit`} className="btn-secondary max-sm:flex-col max-sm:gap-0.5 max-sm:px-1 max-sm:text-xs">
             <Pencil className="size-4" /> Sửa
           </Link>
+          <Link
+            href={`/labels?items=${item.id}`}
+            className="btn-secondary max-sm:flex-col max-sm:gap-0.5 max-sm:px-1 max-sm:text-xs"
+            title="In nhãn QR dán lên hộp / túi"
+          >
+            <QrCode className="size-4" /> In nhãn
+          </Link>
           <form action={duplicateItem.bind(null, item.id)}>
-            <button className="btn-secondary w-full" title="Tạo mặt hàng tương tự">
+            <button
+              className="btn-secondary w-full max-sm:flex-col max-sm:gap-0.5 max-sm:px-1 max-sm:text-xs"
+              title="Tạo mặt hàng tương tự"
+            >
               <Copy className="size-4" /> Nhân bản
             </button>
           </form>
           <form action={deleteItem.bind(null, item.id)}>
             <ConfirmButton
-              className="btn-danger w-full"
-              message={`Xoá "${item.name}" cùng toàn bộ ảnh/video và lịch sử?`}
+              className="btn-danger w-full max-sm:flex-col max-sm:gap-0.5 max-sm:px-1 max-sm:text-xs"
+              message={`Chuyển "${item.name}" vào thùng rác? Khôi phục được trong ${TRASH_DAYS} ngày.`}
             >
               <Trash2 className="size-4" /> Xoá
             </ConfirmButton>
@@ -196,6 +222,7 @@ async function ItemDetail({ params }: { params: PageProps<"/items/[id]">["params
                         {m.reference && ` · ${m.reference}`}
                         {m.note && ` · ${m.note}`}
                         {m.unitPrice != null && ` · ${fmtMoney(m.unitPrice)}/${item.unit}`}
+                        {sourceLabel(m) && ` · ${sourceLabel(m)}`}
                       </p>
                     </div>
                     <form action={deleteMovement.bind(null, m.id)} className="transition group-hover:opacity-100 focus-within:opacity-100 can-hover:opacity-0">

@@ -5,7 +5,7 @@ import { appBaseUrl } from "./constants";
 import { normalizeEmail, randomToken } from "./crypto";
 
 /**
- * Google OAuth 2.0 — Authorization Code + PKCE, xử lý hoàn toàn ở server (theo okia).
+ * Google OAuth 2.0 — Authorization Code + PKCE, xử lý hoàn toàn ở server.
  *  1. start(): sinh state + code_verifier → URL chuyển hướng sang Google
  *  2. exchange(): đổi `code` lấy `id_token`, xác minh chữ ký bằng JWKS của Google
  */

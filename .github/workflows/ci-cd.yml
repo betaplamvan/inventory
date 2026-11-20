@@ -1,5 +1,5 @@
-# CI/CD (theo mô hình okia): build ưu tiên ubuntu-latest của GitHub; job đó KHÔNG khởi động được
-# (hết quota phút) → build lại trên minisforum. Deploy luôn chạy trên minisforum. Chi tiết: deploy/README.md.
+# CI/CD: build ưu tiên ubuntu-latest của GitHub; job đó KHÔNG khởi động được (hết quota phút)
+# → build lại trên self-hosted runner (label "minisforum"). Deploy luôn chạy trên runner đó. Chi tiết: deploy/README.md.
 name: CI/CD
 
 on:
@@ -104,11 +104,14 @@ jobs:
           PASS_ENV: >-
             DATABASE_URL MINIO_ENDPOINT MINIO_PORT MINIO_USE_SSL MINIO_ACCESS_KEY MINIO_SECRET_KEY
             MINIO_BUCKET GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET APP_BASE_URL COOKIE_SECURE MAX_UPLOAD_MB
+            TELEGRAM_BOT_TOKEN SMTP_HOST SMTP_PORT SMTP_USER SMTP_PASS SMTP_FROM
           # Bí mật → secrets; cấu hình không nhạy cảm → vars (Environment "production").
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           MINIO_ACCESS_KEY: ${{ secrets.MINIO_ACCESS_KEY }}
           MINIO_SECRET_KEY: ${{ secrets.MINIO_SECRET_KEY }}
           GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
           MINIO_ENDPOINT: ${{ vars.MINIO_ENDPOINT }}
           MINIO_PORT: ${{ vars.MINIO_PORT }}
           MINIO_USE_SSL: ${{ vars.MINIO_USE_SSL }}
@@ -117,6 +120,10 @@ jobs:
           APP_BASE_URL: ${{ vars.APP_BASE_URL }}
           COOKIE_SECURE: ${{ vars.COOKIE_SECURE || 'true' }}
           MAX_UPLOAD_MB: ${{ vars.MAX_UPLOAD_MB }}
+          SMTP_HOST: ${{ vars.SMTP_HOST }}
+          SMTP_PORT: ${{ vars.SMTP_PORT }}
+          SMTP_USER: ${{ vars.SMTP_USER }}
+          SMTP_FROM: ${{ vars.SMTP_FROM }}
         run: |
           export IMAGE="${IMAGE,,}"
           bash deploy/deploy-container.sh

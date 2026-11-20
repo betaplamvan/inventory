@@ -2,6 +2,8 @@ import { Suspense } from "react";
 import { UserRound } from "lucide-react";
 import { DeleteAccountForm, LogoutOthersForm } from "@/components/account-forms";
 import { ApiTokensPanel } from "@/components/api-tokens-panel";
+import { NotifyPanel } from "@/components/notify-panel";
+import { getNotifyStatus } from "@/lib/notify/settings";
 import { listApiTokens } from "@/lib/auth/api-tokens";
 import { appBaseUrl } from "@/lib/auth/constants";
 import { PageHeader, Skeleton } from "@/components/ui";
@@ -22,7 +24,11 @@ export default function AccountPage() {
 
 async function Account() {
   const me = await requireUser();
-  const [sessions, tokens] = await Promise.all([countSessions(me.id), listApiTokens(me.id)]);
+  const [sessions, tokens, notify] = await Promise.all([
+    countSessions(me.id),
+    listApiTokens(me.id),
+    getNotifyStatus(me.id),
+  ]);
   return (
     <div className="space-y-4">
       <section className="card flex items-center gap-4 p-4 sm:p-5">
@@ -39,6 +45,11 @@ async function Account() {
           <p className="truncate text-sm text-muted">{me.email}</p>
           <p className="mt-1 text-xs text-muted">Đăng nhập bằng Google · tên và ảnh đồng bộ từ tài khoản Google</p>
         </div>
+      </section>
+
+      <section className="card p-4 sm:p-5">
+        <h2 className="mb-3 text-sm font-semibold">Thông báo sắp hết hàng</h2>
+        <NotifyPanel status={notify} email={me.email} />
       </section>
 
       <section className="card p-4 sm:p-5">
