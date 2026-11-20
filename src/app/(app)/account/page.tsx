@@ -1,5 +1,7 @@
 import { Suspense } from "react";
-import { UserRound } from "lucide-react";
+import Link from "next/link";
+import { Heart, UserRound } from "lucide-react";
+import { authorSupportEnabled } from "@/lib/author";
 import { DeleteAccountForm, LogoutOthersForm } from "@/components/account-forms";
 import { ApiTokensPanel } from "@/components/api-tokens-panel";
 import { NotifyPanel } from "@/components/notify-panel";
@@ -72,6 +74,15 @@ async function Account() {
         <h2 className="mb-3 text-sm font-semibold text-danger">Xoá tài khoản</h2>
         <DeleteAccountForm email={me.email} />
       </section>
+
+      {authorSupportEnabled() && (
+        <p className="pt-2 text-center text-xs text-muted">
+          Kho linh kiện là phần mềm mã nguồn mở, miễn phí.{" "}
+          <Link href="/support" className="inline-flex items-center gap-1 font-medium text-accent-strong hover:underline">
+            <Heart className="size-3" /> Ủng hộ tác giả
+          </Link>
+        </p>
+      )}
     </div>
   );
 }

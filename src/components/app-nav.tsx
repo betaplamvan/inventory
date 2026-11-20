@@ -132,7 +132,8 @@ function TabBar({ lowStockBadge, userMenu, pathname }: MobileNavProps & { pathna
   const close = () => setOpen(false);
   const isActive = (l: (typeof LINKS)[number]) =>
     pathname != null && (l.exact ? pathname === l.href : pathname.startsWith(l.href));
-  const moreActive = pathname != null && (MORE_LINKS.some(isActive) || pathname.startsWith("/account"));
+  const moreActive =
+    pathname != null && (MORE_LINKS.some(isActive) || pathname.startsWith("/account") || pathname.startsWith("/support"));
 
   useEffect(() => {
     if (!open) return;

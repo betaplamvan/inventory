@@ -19,7 +19,8 @@ export type TourId =
   | "import"
   | "trash"
   | "account"
-  | "labels";
+  | "labels"
+  | "support";
 
 export const TOURS: Record<TourId, TourStep[]> = {
   home: [
@@ -249,6 +250,18 @@ export const TOURS: Record<TourId, TourStep[]> = {
       target: "acc-tour",
       title: "Xem lại hướng dẫn",
       body: "Bấm đây để các hướng dẫn hiện lại từ đầu ở mọi trang.",
+    },
+  ],
+  support: [
+    {
+      target: "support-tiers",
+      title: "Chọn số tiền",
+      body: "Chọn một mốc gợi ý hoặc nhập số khác. Ủng hộ là tự nguyện và đi thẳng tới tác giả; mọi tính năng vẫn miễn phí.",
+    },
+    {
+      target: "support-qr",
+      title: "Quét bằng app ngân hàng",
+      body: "Số tiền và nội dung chuyển khoản đã điền sẵn trong mã. Chuyển khoản tay thì nhớ ghi đúng nội dung.",
     },
   ],
   labels: [

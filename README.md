@@ -4,6 +4,9 @@
 
 App tự quản lý linh kiện, module, dụng cụ và vật tư điện tử. Đăng nhập bằng Google, mỗi tài khoản có một kho riêng.
 
+- **Dùng ngay, không cần tự cài:** https://inventory.nguyenducquan.io.vn
+- **Mã nguồn:** https://github.com/betaplamvan/inventory (tự deploy: xem [Chạy production bằng Docker](#chạy-production-bằng-docker))
+
 **Stack:** Next.js 16 (App Router, Server Actions) · PostgreSQL 17 + Drizzle ORM · MinIO (ảnh / video / datasheet) · Tailwind CSS 4
 
 ## Tính năng
@@ -175,6 +178,21 @@ https://kho.example.com/api/media/42?thumb=1&t=ml_…
 
 Push lên `main` sẽ build image (GHCR) rồi tự deploy lên máy chủ riêng (self-hosted runner) qua GitHub Actions.
 Xem [deploy/README.md](deploy/README.md).
+
+## Ủng hộ tác giả
+
+Kho linh kiện miễn phí và mã nguồn mở. Nếu app có ích cho bạn, dù dùng bản có sẵn hay tự deploy, có thể mời tác giả một ly cà phê hoặc tặng repo một sao. Cảm ơn bạn!
+
+<img src="docs/support-qr.png" alt="Mã VietQR ủng hộ tác giả" width="200" height="200">
+
+| | |
+|---|---|
+| Ngân hàng | MB Bank |
+| Số tài khoản | `0941672663` |
+| Chủ tài khoản | NGUYEN DUC QUAN |
+| Nội dung | `UNG HO KHO LINH KIEN` |
+
+Quét mã bằng app ngân hàng bất kỳ (VietQR), số tiền tuỳ bạn. Trong app, trang **Ủng hộ tác giả** (link nhỏ trong menu tài khoản) có cùng thông tin kèm mã QR điền sẵn số tiền; trang này hiện trên mọi bản deploy. Thông tin nằm trong [`src/lib/author.ts`](src/lib/author.ts); sửa file đó thì chạy `npx tsx scripts/gen-support-qr.ts` để tạo lại ảnh QR ở đây.
 
 ## Lệnh hữu ích
 

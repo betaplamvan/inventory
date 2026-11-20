@@ -1,13 +1,23 @@
 import Link from "next/link";
-import { LogOut, UserRound } from "lucide-react";
+import { Heart, LogOut, UserRound } from "lucide-react";
 import { logout } from "@/actions/auth";
 import { getCurrentUser } from "@/lib/auth/session";
+import { authorSupportEnabled } from "@/lib/author";
 
+/** Tài khoản + đăng xuất (chân sidebar desktop, bảng Menu trên điện thoại), kèm link nhỏ ủng hộ tác giả. */
 export async function UserMenu() {
   const user = await getCurrentUser();
   if (!user) return null;
   return (
     <div className="space-y-1 border-t border-border pt-3">
+      {authorSupportEnabled() && (
+        <Link
+          href="/support"
+          className="flex items-center gap-2.5 rounded-lg px-3 py-1.5 text-xs text-muted hover:bg-surface-2 hover:text-foreground"
+        >
+          <Heart className="size-3.5" /> Ủng hộ tác giả
+        </Link>
+      )}
       <Link
         href="/account"
         className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm hover:bg-surface-2"
