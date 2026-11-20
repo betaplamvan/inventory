@@ -22,7 +22,7 @@ export type FilterValues = {
 export function ViewToggle({ values, className = "" }: { values: FilterValues; className?: string }) {
   const view = values.view === "grid" ? "grid" : "list";
   return (
-    <div className={`flex rounded-lg border border-border bg-surface p-0.5 ${className}`}>
+    <div className={`flex rounded-lg border border-border bg-surface p-0.5 ${className}`} data-tour="items-view">
       <ViewLink values={values} view="list" active={view === "list"} />
       <ViewLink values={values} view="grid" active={view === "grid"} />
     </div>
@@ -47,7 +47,7 @@ export function ItemsFilters({
   const activeCount = [values.kind, values.category, values.location, values.stock, values.sort].filter(Boolean).length;
 
   return (
-    <Form ref={formRef} action="/items" className="card mb-4 flex flex-col gap-3 p-3">
+    <Form ref={formRef} action="/items" className="card mb-4 flex flex-col gap-3 p-3" data-tour="items-search">
       <input type="hidden" name="view" value={view === "grid" ? "grid" : ""} />
       <div className="flex gap-2">
         <div className="relative flex-1">

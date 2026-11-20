@@ -11,6 +11,7 @@ export default function ImportPage() {
     <div className="mx-auto max-w-4xl">
       <PageHeader
         title="Nhập từ CSV / Excel"
+        tour="import"
         description="Thêm hoặc cập nhật nhiều mặt hàng một lúc từ file CSV hoặc bảng dán từ Excel / Google Sheets"
         back={
           <Link href="/items" className="inline-flex items-center gap-1 text-sm text-muted hover:text-foreground">
@@ -18,7 +19,7 @@ export default function ImportPage() {
           </Link>
         }
         actions={
-          <a href="/api/export?template=1" className="btn-secondary btn-sm">
+          <a href="/api/export?template=1" className="btn-secondary btn-sm" data-tour="import-template">
             <Download className="size-3.5" /> File mẫu
           </a>
         }

@@ -55,7 +55,7 @@ function ActiveNavLinks(props: NavProps) {
 
 function NavList({ lowStockBadge, onNavigate, pathname }: NavProps & { pathname: string | null }) {
   return (
-    <nav className="flex flex-col gap-0.5">
+    <nav className="flex flex-col gap-0.5" data-tour="nav">
       {LINKS.map(({ href, label, icon: Icon, exact }) => {
         const active = pathname != null && (exact ? pathname === href : pathname.startsWith(href));
         return (
@@ -63,6 +63,7 @@ function NavList({ lowStockBadge, onNavigate, pathname }: NavProps & { pathname:
             key={href}
             href={href}
             onClick={onNavigate}
+            data-tour={href === "/scan" ? "nav-scan" : undefined}
             className={`flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition ${
               active
                 ? "bg-accent-soft text-accent-strong"
@@ -83,7 +84,7 @@ export function AppNav({ lowStockBadge, userMenu }: { lowStockBadge: ReactNode; 
   return (
     <div className="flex h-full flex-col gap-6 p-4">
       <Brand />
-      <Link href="/items/new" className="btn-primary">
+      <Link href="/items/new" className="btn-primary" data-tour="nav-add">
         <Plus className="size-4" /> Thêm mặt hàng
       </Link>
       <NavLinks lowStockBadge={lowStockBadge} />
@@ -103,6 +104,7 @@ export function MobileNav(props: MobileNavProps) {
           <Brand />
           <Link
             href="/scan"
+            data-tour="nav-scan"
             aria-label="Quét mã"
             title="Quét mã"
             className="grid size-11 place-items-center rounded-lg text-muted active:bg-surface-2"
@@ -205,7 +207,7 @@ function TabBar({ lowStockBadge, userMenu, pathname }: MobileNavProps & { pathna
         <div className="mx-auto grid h-15 max-w-xl grid-cols-5">
           {tab(HOME)}
           {tab(ITEMS, lowStockBadge)}
-          <Link href="/items/new" onClick={close} aria-label="Thêm mặt hàng" className="grid place-items-center">
+          <Link href="/items/new" onClick={close} aria-label="Thêm mặt hàng" data-tour="nav-add" className="grid place-items-center">
             <span className="grid size-11 place-items-center rounded-full bg-accent text-on-accent shadow-md transition active:scale-90">
               <Plus className="size-5.5" />
             </span>
@@ -214,6 +216,7 @@ function TabBar({ lowStockBadge, userMenu, pathname }: MobileNavProps & { pathna
           <button
             type="button"
             onClick={() => setOpen((v) => !v)}
+            data-tour="nav"
             aria-expanded={open}
             aria-label="Menu"
             className={`flex flex-col items-center justify-center gap-0.5 text-[11px] font-medium transition active:scale-95 ${

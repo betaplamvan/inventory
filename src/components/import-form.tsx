@@ -52,7 +52,10 @@ export function ImportForm() {
   return (
     <div className="space-y-4">
       <div className="card space-y-3 p-4">
-        <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border px-4 py-5 text-sm text-muted transition hover:border-accent hover:text-accent-strong">
+        <label
+          data-tour="import-file"
+          className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border px-4 py-5 text-sm text-muted transition hover:border-accent hover:text-accent-strong"
+        >
           <FileUp className="size-4 shrink-0" />
           <span className="truncate">{fileName ?? "Chọn file .csv / .tsv / .txt"}</span>
           <input
@@ -87,7 +90,7 @@ export function ImportForm() {
             placeholder={"Tên,SKU,Số lượng,Vị trí\nTụ gốm 100nF 0805,C-100N,200,Tủ A > Ngăn 1"}
           />
         </div>
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid gap-3 sm:grid-cols-2" data-tour="import-options">
           <div>
             <label className="label">Dòng trùng ID / SKU với mặt hàng đang có</label>
             <select
@@ -115,7 +118,7 @@ export function ImportForm() {
             Tự tạo danh mục / vị trí chưa có
           </label>
         </div>
-        <div className="flex flex-wrap justify-end gap-2">
+        <div className="flex flex-wrap justify-end gap-2" data-tour="import-run">
           <button type="button" className="btn-secondary" disabled={!text.trim() || pending} onClick={() => run(false)}>
             {pending && !committing && <Loader2 className="size-4 animate-spin" />} Xem trước
           </button>

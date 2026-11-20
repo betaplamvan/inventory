@@ -17,6 +17,7 @@ export default function TrashPage() {
     <div className="mx-auto max-w-3xl">
       <PageHeader
         title="Thùng rác"
+        tour="trash"
         description={`Mặt hàng đã xoá vẫn giữ ảnh và lịch sử, khôi phục được trong ${TRASH_DAYS} ngày. Sau đó sẽ tự xoá hẳn.`}
       />
       <Suspense fallback={<ListSkeleton />}>
@@ -50,7 +51,7 @@ async function Trash() {
           </ConfirmButton>
         </form>
       </div>
-      <ul className="card divide-y divide-border">
+      <ul className="card divide-y divide-border" data-tour="trash-list">
         {rows.map((it) => (
           <li key={it.id} className="flex flex-col gap-2 p-3 sm:flex-row sm:items-center sm:gap-3">
             <div className="flex min-w-0 flex-1 items-center gap-3">

@@ -27,6 +27,7 @@ export default function ItemsPage(props: PageProps<"/items">) {
       <PageHeader
         title="Kho hàng"
         description="Linh kiện, module, dụng cụ và vật tư đang có"
+        tour="items"
         actions={
           <Link href="/items/new" className="btn-primary max-lg:hidden">
             <Plus className="size-4" /> Thêm mặt hàng
@@ -86,6 +87,7 @@ async function ItemsContent({ searchParams }: { searchParams: PageProps<"/items"
 
       <div className="mb-3 flex items-center gap-2 text-sm text-muted">
         <span className="mr-auto">{total} mặt hàng</span>
+        <span className="flex items-center gap-2" data-tour="items-tools">
         <Link href="/import" className="btn-ghost btn-sm" title="Nhập từ CSV / Excel">
           <FileUp className="size-3.5" /> <span className="max-sm:hidden">Nhập</span>
         </Link>
@@ -97,6 +99,7 @@ async function ItemsContent({ searchParams }: { searchParams: PageProps<"/items"
             <QrCode className="size-3.5" /> <span className="max-sm:hidden">In nhãn</span>
           </Link>
         )}
+        </span>
         <ViewToggle values={values} className="md:hidden" />
       </div>
 
@@ -110,9 +113,9 @@ async function ItemsContent({ searchParams }: { searchParams: PageProps<"/items"
         </EmptyState>
       ) : values.view === "grid" ? (
         <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 sm:gap-3 lg:grid-cols-4 xl:grid-cols-5">
-          {rows.map((it) => (
+          {rows.map((it, i) => (
             <div key={it.id} className="card group flex flex-col overflow-hidden transition hover:border-accent/40">
-              <Link href={`/items/${it.id}`} className="block flex-1">
+              <Link href={`/items/${it.id}`} className="block flex-1" data-tour={i === 0 ? "items-row" : undefined}>
                 <ItemThumb cover={it.cover} className="aspect-square w-full rounded-none" iconClass="size-10" />
                 <div className="space-y-1.5 p-3 pb-2">
                   <p className="line-clamp-2 text-sm font-medium group-hover:text-accent-strong">{it.name}</p>
@@ -123,7 +126,7 @@ async function ItemsContent({ searchParams }: { searchParams: PageProps<"/items"
                   <p className="truncate text-xs text-muted">{it.location?.name ?? "Chưa có vị trí"}</p>
                 </div>
               </Link>
-              <div className="px-3 pb-3">
+              <div className="px-3 pb-3" data-tour={i === 0 ? "items-qty" : undefined}>
                 <QuickAdjust itemId={it.id} quantity={it.quantity} minQuantity={it.minQuantity} unit={it.unit} block />
               </div>
             </div>
@@ -131,10 +134,14 @@ async function ItemsContent({ searchParams }: { searchParams: PageProps<"/items"
         </div>
       ) : (
         <div className="card divide-y divide-border">
-          {rows.map((it) => (
+          {rows.map((it, i) => (
             // Điện thoại: 2 tầng — (ảnh + tên) rồi (vị trí + nút +/-); từ sm trở lên: một hàng ngang
             <div key={it.id} className="flex flex-col gap-2 p-3 sm:flex-row sm:items-center sm:gap-3">
-              <Link href={`/items/${it.id}`} className="flex min-w-0 flex-1 items-center gap-3">
+              <Link
+                href={`/items/${it.id}`}
+                className="flex min-w-0 flex-1 items-center gap-3"
+                data-tour={i === 0 ? "items-row" : undefined}
+              >
                 <ItemThumb cover={it.cover} />
                 <div className="min-w-0 flex-1">
                   <p className="line-clamp-2 font-medium hover:text-accent-strong sm:truncate">{it.name}</p>
@@ -151,7 +158,7 @@ async function ItemsContent({ searchParams }: { searchParams: PageProps<"/items"
                 {it.location?.name ?? "—"}
               </div>
               <div className="hidden w-28 text-right text-sm text-muted lg:block">{fmtMoney(it.unitPrice)}</div>
-              <div className="flex items-center justify-between gap-3 pl-15 sm:pl-0">
+              <div className="flex items-center justify-between gap-3 pl-15 sm:pl-0" data-tour={i === 0 ? "items-qty" : undefined}>
                 <span className="flex min-w-0 items-center gap-1 text-xs text-muted sm:hidden">
                   {it.location && (
                     <>

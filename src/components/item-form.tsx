@@ -80,7 +80,7 @@ export function ItemForm({
         <div className="rounded-lg border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger">{error}</div>
       )}
 
-      <Section title="Thông tin cơ bản">
+      <Section title="Thông tin cơ bản" tour="new-basic">
         <Field label="Tên mặt hàng *" error={errors.name} className="sm:col-span-2">
           <input
             name="name"
@@ -240,7 +240,7 @@ export function ItemForm({
         </div>
       </Section>
 
-      <Section title="Tồn kho">
+      <Section title="Tồn kho" tour="new-stock">
         <Field
           label="Số lượng hiện có"
           error={errors.quantity}
@@ -311,7 +311,7 @@ export function ItemForm({
       </Section>
 
       {!item && (
-        <Section title="Ảnh / video / tài liệu">
+        <Section title="Ảnh / video / tài liệu" tour="new-media">
           <div className="sm:col-span-2">
             <label className="flex cursor-pointer flex-col items-center gap-2 rounded-xl border-2 border-dashed border-border px-4 py-8 text-center text-sm text-muted transition hover:border-accent hover:text-accent-strong">
               <ImagePlus className="size-8" />
@@ -350,7 +350,7 @@ export function ItemForm({
         </Section>
       )}
 
-      <div className="sticky bottom-(--tabbar) z-10 -mx-4 flex flex-wrap items-center justify-end gap-2 border-t border-border bg-background/90 px-4 py-3 backdrop-blur sm:mx-0 sm:rounded-xl sm:border">
+      <div data-tour="new-save" className="sticky bottom-(--tabbar) z-10 -mx-4 flex flex-wrap items-center justify-end gap-2 border-t border-border bg-background/90 px-4 py-3 backdrop-blur sm:mx-0 sm:rounded-xl sm:border">
         {progress && <span className="w-full truncate text-xs text-muted sm:mr-auto sm:w-auto">{progress}</span>}
         <button type="button" onClick={() => router.back()} className="btn-secondary" disabled={pending}>
           Huỷ
@@ -364,9 +364,9 @@ export function ItemForm({
   );
 }
 
-function Section({ title, children }: { title: string; children: ReactNode }) {
+function Section({ title, children, tour }: { title: string; children: ReactNode; tour?: string }) {
   return (
-    <fieldset className="card p-4 sm:p-5">
+    <fieldset className="card p-4 sm:p-5" data-tour={tour}>
       <legend className="sr-only">{title}</legend>
       <h2 className="mb-4 text-sm font-semibold">{title}</h2>
       <div className="grid gap-4 sm:grid-cols-2">{children}</div>

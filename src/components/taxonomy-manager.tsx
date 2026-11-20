@@ -56,6 +56,7 @@ export function TaxonomyManager({
         <button
           type="button"
           className="btn-primary"
+          data-tour="tax-add"
           onClick={() => {
             setAddParent(null);
             setEditing("new");
@@ -66,7 +67,7 @@ export function TaxonomyManager({
       )}
 
       {nodes.length > 0 && (
-        <ul className="card divide-y divide-border">
+        <ul className="card divide-y divide-border" data-tour="tax-list">
           {nodes.map((n) =>
             editing === n.id ? (
               <li key={n.id} className="p-3">

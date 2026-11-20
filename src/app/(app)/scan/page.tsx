@@ -8,6 +8,7 @@ export default function ScanPage() {
     <div className="mx-auto max-w-xl">
       <PageHeader
         title="Quét mã"
+        tour="scan"
         description="Quét nhãn QR của kho, mã vạch SKU / MPN trên túi linh kiện, hoặc nhãn vị trí"
       />
       <Scanner />

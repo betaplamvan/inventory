@@ -5,23 +5,32 @@ import type { ItemKind, Media } from "@/db/schema";
 import { KIND_COLORS, KIND_LABELS } from "@/lib/constants";
 import { fmtQty } from "@/lib/format";
 import { stockState } from "@/lib/stock";
+import type { TourId } from "@/lib/tours";
+import { Tour, TourButton } from "./tour";
 
 export function PageHeader({
   title,
   description,
   actions,
   back,
+  tour,
 }: {
   title: ReactNode;
   description?: ReactNode;
   actions?: ReactNode;
   back?: ReactNode;
+  /** Hướng dẫn của trang: tự chạy lần đầu, nút ? cạnh tiêu đề để xem lại */
+  tour?: TourId;
 }) {
   return (
     <div className="mb-4 flex flex-wrap items-end justify-between gap-3 sm:mb-6">
+      {tour && <Tour id={tour} />}
       <div className="min-w-0">
         {back && <div className="mb-1">{back}</div>}
-        <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">{title}</h1>
+        <h1 className="flex items-center gap-1.5 text-xl font-semibold tracking-tight sm:text-2xl">
+          {title}
+          {tour && <TourButton id={tour} />}
+        </h1>
         {description && <p className="mt-1 text-sm text-muted">{description}</p>}
       </div>
       {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}

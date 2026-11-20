@@ -166,7 +166,7 @@ export function Scanner() {
 
   return (
     <div className="space-y-4">
-      <div className="card relative aspect-[3/4] overflow-hidden bg-black sm:aspect-video">
+      <div className="card relative aspect-[3/4] overflow-hidden bg-black sm:aspect-video" data-tour="scan-camera">
         <video ref={videoRef} playsInline muted className="size-full object-cover" />
         <canvas ref={canvasRef} className="hidden" />
         {status === "scanning" && (
@@ -200,6 +200,7 @@ export function Scanner() {
 
       <form
         className="flex gap-2"
+        data-tour="scan-manual"
         onSubmit={(e) => {
           e.preventDefault();
           if (!manual.trim()) return;

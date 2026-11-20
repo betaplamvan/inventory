@@ -12,6 +12,7 @@ export default function NewItemPage() {
     <div className="mx-auto max-w-3xl">
       <PageHeader
         title="Thêm mặt hàng"
+        tour="new-item"
         back={
           <Link href="/items" className="inline-flex items-center gap-1 text-sm text-muted hover:text-foreground">
             <ChevronLeft className="size-4" /> Kho hàng

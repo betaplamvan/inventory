@@ -21,7 +21,7 @@ export function MovementForm({ itemId, unit, currentPrice }: { itemId: number; u
   const tab = TABS.find((t) => t.type === type)!;
 
   return (
-    <div className="card p-4">
+    <div className="card p-4" data-tour="item-movement">
       <div className="mb-3 grid grid-cols-3 gap-1 rounded-lg bg-surface-2 p-1">
         {TABS.map((t) => (
           <button

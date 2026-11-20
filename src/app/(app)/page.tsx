@@ -12,6 +12,7 @@ export default function DashboardPage() {
       <PageHeader
         title="Tổng quan"
         description="Tình trạng kho linh kiện, dụng cụ và vật tư của bạn"
+        tour="home"
         actions={
           <Link href="/items/new" className="btn-primary max-lg:hidden">
             <Plus className="size-4" /> Thêm mặt hàng
@@ -81,6 +82,7 @@ async function Dashboard() {
 
   if (totals.items === 0) {
     return (
+      <div data-tour="home-empty">
       <EmptyState icon={<Boxes className="size-10" />} title="Kho đang trống">
         <p>Bắt đầu bằng cách tạo danh mục, vị trí cất và thêm mặt hàng đầu tiên.</p>
         <div className="mt-4 flex flex-wrap justify-center gap-2">
@@ -92,6 +94,7 @@ async function Dashboard() {
           </Link>
         </div>
       </EmptyState>
+      </div>
     );
   }
 
@@ -100,7 +103,7 @@ async function Dashboard() {
   return (
     <div className="space-y-4 sm:space-y-6">
       {/* Điện thoại: 3 ô đếm trên một hàng, ô giá trị (số dài) nằm trọn một hàng bên dưới */}
-      <div className="grid grid-cols-3 gap-2 sm:gap-3 lg:grid-cols-4">
+      <div className="grid grid-cols-3 gap-2 sm:gap-3 lg:grid-cols-4" data-tour="home-stats">
         <StatTile label="Mặt hàng" value={fmtQty(totals.items)} icon={<Boxes className="size-4" />} href="/items" />
         <StatTile
           label="Giá trị kho ước tính"
@@ -125,7 +128,7 @@ async function Dashboard() {
       </div>
 
       <div className="grid gap-4 sm:gap-6 lg:grid-cols-2">
-        <section className="card min-w-0 p-4">
+        <section className="card min-w-0 p-4" data-tour="home-low">
           <div className="mb-3 flex items-center justify-between">
             <h2 className="font-semibold">Cần mua thêm</h2>
             <Link href="/items?stock=low" className="-my-2 py-2 text-xs text-accent-strong hover:underline">

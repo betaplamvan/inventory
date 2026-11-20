@@ -3,6 +3,7 @@ import { UserRound } from "lucide-react";
 import { DeleteAccountForm, LogoutOthersForm } from "@/components/account-forms";
 import { ApiTokensPanel } from "@/components/api-tokens-panel";
 import { NotifyPanel } from "@/components/notify-panel";
+import { ResetToursButton } from "@/components/tour";
 import { getNotifyStatus } from "@/lib/notify/settings";
 import { listApiTokens } from "@/lib/auth/api-tokens";
 import { appBaseUrl } from "@/lib/auth/constants";
@@ -14,7 +15,7 @@ export const metadata = { title: "Tài khoản" };
 export default function AccountPage() {
   return (
     <div className="mx-auto max-w-2xl">
-      <PageHeader title="Tài khoản" />
+      <PageHeader title="Tài khoản" tour="account" />
       <Suspense fallback={<Skeleton className="h-96" />}>
         <Account />
       </Suspense>
@@ -47,7 +48,7 @@ async function Account() {
         </div>
       </section>
 
-      <section className="card p-4 sm:p-5">
+      <section className="card p-4 sm:p-5" data-tour="acc-notify">
         <h2 className="mb-3 text-sm font-semibold">Thông báo sắp hết hàng</h2>
         <NotifyPanel status={notify} email={me.email} />
       </section>
@@ -57,9 +58,14 @@ async function Account() {
         <LogoutOthersForm otherSessions={Math.max(0, sessions - 1)} />
       </section>
 
-      <section className="card min-w-0 p-4 sm:p-5">
+      <section className="card min-w-0 p-4 sm:p-5" data-tour="acc-tokens">
         <h2 className="mb-3 text-sm font-semibold">API token cho AI agent (MCP)</h2>
         <ApiTokensPanel tokens={tokens} mcpUrl={`${appBaseUrl()}/api/mcp`} />
+      </section>
+
+      <section className="card p-4 sm:p-5">
+        <h2 className="mb-3 text-sm font-semibold">Hướng dẫn sử dụng</h2>
+        <ResetToursButton />
       </section>
 
       <section className="card border-danger/30 p-4 sm:p-5">

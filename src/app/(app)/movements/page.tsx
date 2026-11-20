@@ -15,7 +15,7 @@ const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v) 
 export default function MovementsPage(props: PageProps<"/movements">) {
   return (
     <>
-      <PageHeader title="Lịch sử nhập / xuất" description="Mọi thay đổi số lượng trong kho" />
+      <PageHeader title="Lịch sử nhập / xuất" description="Mọi thay đổi số lượng trong kho" tour="movements" />
       <Suspense fallback={<ListSkeleton rows={10} />}>
         <Movements searchParams={props.searchParams} />
       </Suspense>
@@ -34,12 +34,12 @@ async function Movements({ searchParams }: { searchParams: PageProps<"/movements
   return (
     <>
       <div className="mb-4 flex flex-wrap items-center gap-2">
-        <Form action="/movements" className="relative min-w-60 flex-1">
+        <Form action="/movements" className="relative min-w-60 flex-1" data-tour="mv-search">
           {type && <input type="hidden" name="type" value={type} />}
           <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted" />
           <input name="q" type="search" defaultValue={q} key={q} placeholder="Tìm theo mặt hàng, dự án, ghi chú…" className="input pl-9" enterKeyHint="search" />
         </Form>
-        <div className="grid w-full grid-cols-4 rounded-lg border border-border bg-surface p-0.5 text-center text-sm sm:flex sm:w-auto">
+        <div className="grid w-full grid-cols-4 rounded-lg border border-border bg-surface p-0.5 text-center text-sm sm:flex sm:w-auto" data-tour="mv-type">
           {([undefined, "in", "out", "adjust"] as const).map((t) => (
             <Link
               key={t ?? "all"}
@@ -58,7 +58,7 @@ async function Movements({ searchParams }: { searchParams: PageProps<"/movements
         <EmptyState icon={<ArrowLeftRight className="size-10" />} title="Chưa có giao dịch nào" />
       ) : (
         <>
-          <ul className="card divide-y divide-border md:hidden">
+          <ul className="card divide-y divide-border md:hidden" data-tour="mv-list">
             {rows.map(({ movement: m, item }) => {
               const extra = [m.reference, m.note, m.unitPrice != null ? `${fmtMoney(m.unitPrice)}/${item.unit}` : null]
                 .filter(Boolean)
@@ -87,7 +87,7 @@ async function Movements({ searchParams }: { searchParams: PageProps<"/movements
               );
             })}
           </ul>
-          <div className="card hidden overflow-x-auto md:block">
+          <div className="card hidden overflow-x-auto md:block" data-tour="mv-list">
             <table className="w-full min-w-[640px] text-sm">
               <thead className="border-b border-border text-left text-xs text-muted">
                 <tr>

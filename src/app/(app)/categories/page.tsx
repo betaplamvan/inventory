@@ -11,7 +11,11 @@ export const metadata = { title: "Danh mục" };
 export default function CategoriesPage() {
   return (
     <div className="mx-auto max-w-3xl">
-      <PageHeader title="Danh mục" description="Phân loại linh kiện theo nhóm, có thể lồng nhiều cấp (VD: Tụ điện › Tụ gốm)" />
+      <PageHeader
+        title="Danh mục"
+        description="Phân loại linh kiện theo nhóm, có thể lồng nhiều cấp (VD: Tụ điện › Tụ gốm)"
+        tour="categories"
+      />
       <Suspense fallback={<ListSkeleton />}>
         <Categories />
       </Suspense>
@@ -24,7 +28,7 @@ async function Categories() {
   return (
     <>
       {nodes.length === 0 && (
-        <form action={seedDefaultCategories} className="card mb-4 flex flex-wrap items-center justify-between gap-3 p-4">
+        <form action={seedDefaultCategories} className="card mb-4 flex flex-wrap items-center justify-between gap-3 p-4" data-tour="cat-seed">
           <p className="text-sm text-muted">
             Chưa có danh mục nào. Tạo nhanh bộ danh mục điện tử phổ biến (điện trở, tụ, IC, module, dụng cụ…)?
           </p>

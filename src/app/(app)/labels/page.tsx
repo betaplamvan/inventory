@@ -94,6 +94,7 @@ async function Labels({ searchParams }: { searchParams: PageProps<"/labels">["se
       <div className="print:hidden">
         <PageHeader
           title="In nhãn QR"
+          tour="labels"
           description={`${labels.length} nhãn${labels.length >= MAX_LABELS ? ` (tối đa ${MAX_LABELS} mỗi lần)` : ""}. Quét bằng camera điện thoại hoặc nút Quét mã trong app để mở đúng ${locParam ? "vị trí" : "mặt hàng"}.`}
           back={
             <Link href={back.href} className="inline-flex items-center gap-1 text-sm text-muted hover:text-foreground">
@@ -102,7 +103,7 @@ async function Labels({ searchParams }: { searchParams: PageProps<"/labels">["se
           }
           actions={<PrintButton disabled={!labels.length} />}
         />
-        <div className="mb-4 flex flex-wrap items-center gap-2 text-sm">
+        <div className="mb-4 flex flex-wrap items-center gap-2 text-sm" data-tour="labels-size">
           <span className="text-muted">Cỡ nhãn:</span>
           <div className="flex rounded-lg border border-border bg-surface p-0.5">
             {(Object.keys(SIZES) as SizeKey[]).map((k) => (

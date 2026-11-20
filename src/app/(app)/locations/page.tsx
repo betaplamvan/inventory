@@ -14,10 +14,12 @@ export default function LocationsPage() {
       <PageHeader
         title="Vị trí cất"
         description="Tủ, kệ, hộp, ngăn… nơi bạn để đồ. Có thể lồng nhiều cấp (VD: Tủ A › Ngăn 3)"
+        tour="locations"
         actions={
           <Link
             href="/labels?locations=all"
             className="btn-secondary btn-sm"
+            data-tour="loc-labels"
             title="In nhãn QR dán lên tủ / hộp: quét là ra danh sách đồ bên trong"
           >
             <QrCode className="size-3.5" /> In nhãn vị trí

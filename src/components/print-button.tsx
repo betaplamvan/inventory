@@ -4,7 +4,7 @@ import { Printer } from "lucide-react";
 
 export function PrintButton({ disabled }: { disabled?: boolean }) {
   return (
-    <button type="button" className="btn-primary" disabled={disabled} onClick={() => window.print()}>
+    <button type="button" className="btn-primary" disabled={disabled} onClick={() => window.print()} data-tour="labels-print">
       <Printer className="size-4" /> In
     </button>
   );

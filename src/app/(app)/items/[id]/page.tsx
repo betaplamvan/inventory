@@ -4,6 +4,7 @@ import { Suspense } from "react";
 import { ChevronLeft, Copy, ExternalLink, FileText, MapPin, Pencil, QrCode, ShoppingCart, Trash2 } from "lucide-react";
 import { deleteItem, deleteMovement, duplicateItem } from "@/actions/items";
 import { ConfirmButton } from "@/components/confirm-button";
+import { Tour, TourButton } from "@/components/tour";
 import { MediaGallery } from "@/components/media-gallery";
 import { MovementForm } from "@/components/movement-form";
 import { KindBadge, MovementIcon, Skeleton, StockQty, StockStateBadge } from "@/components/ui";
@@ -21,9 +22,13 @@ export async function generateMetadata(props: PageProps<"/items/[id]">) {
 export default function ItemPage(props: PageProps<"/items/[id]">) {
   return (
     <>
-      <Link href="/items" className="-mt-1 mb-1 inline-flex items-center gap-1 py-1 text-sm text-muted hover:text-foreground">
-        <ChevronLeft className="size-4" /> Kho hàng
-      </Link>
+      <Tour id="item" />
+      <div className="-mt-1 mb-1 flex items-center justify-between gap-2">
+        <Link href="/items" className="inline-flex items-center gap-1 py-1 text-sm text-muted hover:text-foreground">
+          <ChevronLeft className="size-4" /> Kho hàng
+        </Link>
+        <TourButton id="item" />
+      </div>
       <Suspense
         fallback={
           <div className="grid gap-4 sm:gap-6 lg:grid-cols-[1fr_360px]">
@@ -91,7 +96,7 @@ async function ItemDetail({
           </div>
         </div>
         {/* Điện thoại: 4 nút một hàng, icon nằm trên chữ */}
-        <div className="grid w-full grid-cols-4 gap-2 sm:flex sm:w-auto sm:flex-wrap">
+        <div className="grid w-full grid-cols-4 gap-2 sm:flex sm:w-auto sm:flex-wrap" data-tour="item-actions">
           <Link href={`/items/${item.id}/edit`} className="btn-secondary max-sm:flex-col max-sm:gap-0.5 max-sm:px-1 max-sm:text-xs">
             <Pencil className="size-4" /> Sửa
           </Link>
@@ -123,7 +128,7 @@ async function ItemDetail({
 
       <div className="grid gap-4 sm:gap-6 lg:grid-cols-[1fr_360px]">
         <div className="min-w-0 space-y-4 sm:space-y-6">
-          <section className="card p-4">
+          <section className="card p-4" data-tour="item-media">
             <h2 className="mb-3 text-sm font-semibold">Ảnh, video & tài liệu</h2>
             <MediaGallery
               itemId={item.id}
@@ -199,7 +204,7 @@ async function ItemDetail({
             </section>
           )}
 
-          <section className="card p-4">
+          <section className="card p-4" data-tour="item-history">
             <h2 className="mb-3 text-sm font-semibold">Lịch sử nhập / xuất</h2>
             {movements.length === 0 ? (
               <p className="text-sm text-muted">Chưa có giao dịch.</p>
@@ -242,7 +247,7 @@ async function ItemDetail({
         </div>
 
         <aside className="min-w-0 space-y-4 max-lg:order-first lg:sticky lg:top-6 lg:self-start">
-          <div className="card p-4">
+          <div className="card p-4" data-tour="item-stock">
             <p className="text-xs font-medium text-muted">Tồn kho hiện tại</p>
             <div className="mt-1">
               <StockQty quantity={item.quantity} minQuantity={item.minQuantity} unit={item.unit} size="lg" />
