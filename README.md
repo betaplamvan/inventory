@@ -235,3 +235,7 @@ src/
 drizzle/              file migration SQL
 scripts/seed.ts       dữ liệu mẫu
 ```
+
+## Giấy phép
+
+[MIT](LICENSE): tự do dùng, sửa, tự deploy, kể cả dùng thương mại, chỉ cần giữ lại thông báo bản quyền.
