@@ -103,7 +103,7 @@ async function ItemsContent({ searchParams }: { searchParams: PageProps<"/items"
       {rows.length === 0 ? (
         <EmptyState icon={<PackageSearch className="size-10" />} title="Không tìm thấy mặt hàng nào">
           Thử đổi từ khoá / bộ lọc, hoặc{" "}
-          <Link href="/items/new" className="text-accent hover:underline">
+          <Link href="/items/new" className="text-accent-strong hover:underline">
             thêm mặt hàng mới
           </Link>
           .

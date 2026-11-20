@@ -1,13 +1,11 @@
 import Link from "next/link";
-import { Cpu } from "lucide-react";
+import { Logo } from "@/components/logo";
 
 export default function AuthLayout({ children }: LayoutProps<"/">) {
   return (
     <div className="flex min-h-dvh flex-col items-center justify-center px-4 py-10">
-      <Link href="/" className="mb-6 flex items-center gap-2 text-lg font-semibold tracking-tight">
-        <span className="grid size-9 place-items-center rounded-lg bg-accent text-white dark:text-black">
-          <Cpu className="size-5" />
-        </span>
+      <Link href="/" className="mb-6 flex items-center gap-2.5 text-lg font-bold tracking-tight">
+        <Logo className="size-10" />
         Kho linh kiện
       </Link>
       <div className="card w-full max-w-sm p-6 shadow-sm">{children}</div>

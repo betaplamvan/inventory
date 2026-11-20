@@ -76,7 +76,7 @@ export function ItemsFilters({
           <SlidersHorizontal className="size-4" />
           Lọc
           {activeCount > 0 && (
-            <span className="grid size-5 place-items-center rounded-full bg-accent text-[11px] font-semibold text-white dark:text-black">
+            <span className="grid size-5 place-items-center rounded-full bg-accent text-[11px] font-semibold text-on-accent">
               {activeCount}
             </span>
           )}

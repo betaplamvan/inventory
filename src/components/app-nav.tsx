@@ -6,7 +6,6 @@ import { Suspense, useEffect, useState, type ReactNode } from "react";
 import {
   ArrowLeftRight,
   Boxes,
-  Cpu,
   FileUp,
   FolderTree,
   LayoutDashboard,
@@ -16,6 +15,7 @@ import {
   ScanLine,
   Trash2,
 } from "lucide-react";
+import { Logo } from "./logo";
 
 const LINKS = [
   { href: "/", label: "Tổng quan", icon: LayoutDashboard, exact: true },
@@ -31,10 +31,8 @@ const LINKS = [
 function Brand() {
   return (
     <Link href="/" className="flex items-center gap-2 font-semibold tracking-tight">
-      <span className="grid size-8 place-items-center rounded-lg bg-accent text-white dark:text-black">
-        <Cpu className="size-4.5" />
-      </span>
-      <span>Kho linh kiện</span>
+      <Logo className="size-8" />
+      <span className="font-bold">Kho linh kiện</span>
     </Link>
   );
 }
@@ -208,7 +206,7 @@ function TabBar({ lowStockBadge, userMenu, pathname }: MobileNavProps & { pathna
           {tab(HOME)}
           {tab(ITEMS, lowStockBadge)}
           <Link href="/items/new" onClick={close} aria-label="Thêm mặt hàng" className="grid place-items-center">
-            <span className="grid size-11 place-items-center rounded-full bg-accent text-white shadow-md transition active:scale-90 dark:text-black">
+            <span className="grid size-11 place-items-center rounded-full bg-accent text-on-accent shadow-md transition active:scale-90">
               <Plus className="size-5.5" />
             </span>
           </Link>

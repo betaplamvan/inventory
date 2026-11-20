@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { ArrowDownLeft, ArrowUpRight, Cpu, Film, FileText, RefreshCw } from "lucide-react";
+import { ArrowDownLeft, ArrowUpRight, Film, FileText, Package, RefreshCw } from "lucide-react";
 import type { ItemKind, Media } from "@/db/schema";
 import { KIND_COLORS, KIND_LABELS } from "@/lib/constants";
 import { fmtQty } from "@/lib/format";
@@ -105,7 +105,7 @@ export function ItemThumb({
       ) : cover ? (
         <FileText className={`${iconClass} text-muted`} />
       ) : (
-        <Cpu className={`${iconClass} text-muted/60`} />
+        <Package className={`${iconClass} text-muted/60`} />
       )}
     </div>
   );
@@ -162,7 +162,7 @@ export function Pagination({
             key={p}
             href={hrefFor(p)}
             className={`min-w-9 rounded-lg px-3 py-1.5 text-center text-sm pointer-coarse:min-w-11 pointer-coarse:py-2.5 ${
-              p === page ? "bg-accent text-white dark:text-black" : "text-muted hover:bg-surface-2"
+              p === page ? "bg-accent font-semibold text-on-accent" : "text-muted hover:bg-surface-2"
             }`}
           >
             {p}

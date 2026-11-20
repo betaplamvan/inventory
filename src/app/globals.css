@@ -3,18 +3,30 @@
 /* Thiết bị có chuột thật (hover được) — dùng cho các nút chỉ hiện khi rê chuột. */
 @custom-variant can-hover (@media (hover: hover));
 
+/*
+ * Chủ đề "Ngăn kéo": vàng nhãn dán trên nền đen.
+ *  --accent        nền nút / điểm nhấn (vàng) — chữ trên nó dùng --on-accent (đen), KHÔNG dùng làm màu chữ
+ *  --accent-strong màu CHỮ nhấn: link, mục đang chọn (vàng sậm ở chế độ sáng cho đủ tương phản)
+ *  --accent-hover  nền nút khi rê chuột
+ *  --logo-*        màu logo (src/components/logo.tsx)
+ */
 :root {
-  --background: #f6f7f9;
+  --background: #faf8f3;
   --surface: #ffffff;
-  --surface-2: #f1f3f5;
-  --border: #e3e6ea;
-  --foreground: #16181d;
-  --muted: #646b76;
-  --accent: #0f9f6e;
-  --accent-strong: #0b7f58;
-  --accent-soft: #e3f6ee;
-  --danger: #d33b3b;
-  --warning: #c27803;
+  --surface-2: #f3f0e8;
+  --border: #e7e2d5;
+  --foreground: #1a1a17;
+  --muted: #64615a;
+  --accent: #f5b800;
+  --accent-hover: #e0a800;
+  --accent-strong: #7a5800;
+  --accent-soft: #fff4cc;
+  --on-accent: #1a1a17;
+  --danger: #c42b2b;
+  --warning: #b45309;
+  --logo-bg: #1a1a17;
+  --logo-fg: #ffffff;
+  --logo-accent: #f5b800;
   /* Chiều cao thanh điều hướng đáy trên điện thoại (0 ở desktop) */
   --tabbar: calc(3.75rem + env(safe-area-inset-bottom, 0px));
 }
@@ -27,17 +39,22 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0d0f12;
-    --surface: #15181d;
-    --surface-2: #1c2026;
-    --border: #2a2f37;
-    --foreground: #e8eaed;
-    --muted: #9aa1ac;
-    --accent: #2bc28c;
-    --accent-strong: #4fd6a4;
-    --accent-soft: #10291f;
-    --danger: #f06a6a;
-    --warning: #f0b440;
+    --background: #131311;
+    --surface: #1c1c19;
+    --surface-2: #262521;
+    --border: #33312c;
+    --foreground: #efede6;
+    --muted: #a3a096;
+    --accent: #ffc933;
+    --accent-hover: #ffd45c;
+    --accent-strong: #ffd45c;
+    --accent-soft: #3a300f;
+    --on-accent: #1a1a17;
+    --danger: #f47272;
+    --warning: #f59e4c;
+    --logo-bg: #ffc933;
+    --logo-fg: #1a1a17;
+    --logo-accent: #1a1a17;
   }
 }
 
@@ -49,12 +66,17 @@
   --color-foreground: var(--foreground);
   --color-muted: var(--muted);
   --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
   --color-accent-strong: var(--accent-strong);
   --color-accent-soft: var(--accent-soft);
+  --color-on-accent: var(--on-accent);
+  --color-logo-bg: var(--logo-bg);
+  --color-logo-fg: var(--logo-fg);
+  --color-logo-accent: var(--logo-accent);
   --color-danger: var(--danger);
   --color-warning: var(--warning);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-be-vietnam), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, monospace;
 }
 
 html {
@@ -89,7 +111,7 @@ textarea {
 }
 
 @utility input {
-  @apply w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground outline-none transition placeholder:text-muted/70 pointer-coarse:min-h-11 pointer-coarse:text-base focus:border-accent focus:ring-2 focus:ring-accent/20 disabled:opacity-60;
+  @apply w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground outline-none transition placeholder:text-muted/70 pointer-coarse:min-h-11 pointer-coarse:text-base focus:border-accent-strong focus:ring-2 focus:ring-accent/40 disabled:opacity-60;
 }
 @utility label {
   @apply mb-1 block text-xs font-medium text-muted;
@@ -101,7 +123,7 @@ textarea {
   @apply inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium whitespace-nowrap transition select-none active:scale-[0.97] disabled:pointer-events-none disabled:opacity-50 pointer-coarse:min-h-11;
 }
 @utility btn-primary {
-  @apply btn bg-accent text-white hover:bg-accent-strong dark:text-black;
+  @apply btn bg-accent font-semibold text-on-accent hover:bg-accent-hover;
 }
 @utility btn-secondary {
   @apply btn border border-border bg-surface text-foreground hover:bg-surface-2;

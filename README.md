@@ -1,3 +1,5 @@
+<img src="public/icons/icon-192.png" alt="" width="72" height="72">
+
 # Kho linh kiện
 
 App tự quản lý linh kiện, module, dụng cụ và vật tư điện tử. Đăng nhập bằng Google, mỗi tài khoản có một kho riêng.
@@ -19,7 +21,7 @@ App tự quản lý linh kiện, module, dụng cụ và vật tư điện tử.
 - **Cảnh báo sắp hết hàng** qua Telegram và / hoặc email, gửi ngay khi số lượng tụt xuống mức tối thiểu
 - **Cài như app (PWA)**: thêm vào màn hình chính, có lối tắt Quét mã / Thêm mặt hàng, nút chụp ảnh thẳng bằng camera
 - **Đăng nhập bằng Google (OAuth)**, mỗi tài khoản có kho riêng. App không lưu mật khẩu (xem mục bên dưới)
-- Giao diện có bản cho điện thoại và chế độ tối. File đi qua Next nên chỉ cần mở **1 cổng** là điện thoại trong mạng LAN dùng được
+- Giao diện có bản cho điện thoại và chế độ tối, chủ đề vàng đen (logo tủ ngăn kéo, font Be Vietnam Pro). File đi qua Next nên chỉ cần mở **1 cổng** là điện thoại trong mạng LAN dùng được
 
 ## Đăng nhập bằng Google
 
@@ -182,6 +184,7 @@ Xem [deploy/README.md](deploy/README.md).
 | `npm run db:migrate` | Áp dụng migration (thường không cần, vì server tự chạy khi khởi động) |
 | `npm run db:studio` | Mở Drizzle Studio để xem và sửa DB |
 | `npm run typecheck` | Kiểm tra TypeScript |
+| `node scripts/gen-icons.mjs` | Tạo lại icon app và favicon từ logo (sau khi sửa logo) |
 | `docker compose down -v` | **Xoá sạch** DB và file (mất toàn bộ dữ liệu) |
 
 ## Ghi chú về MinIO

@@ -147,7 +147,7 @@ export function MediaGallery({ itemId, media, coverId }: { itemId: number; media
           upload(Array.from(e.dataTransfer.files));
         }}
         className={`flex cursor-pointer items-center justify-center gap-2 rounded-xl border-2 border-dashed px-4 py-5 text-sm transition ${
-          dragging ? "border-accent bg-accent-soft text-accent-strong" : "border-border text-muted hover:border-accent hover:text-accent"
+          dragging ? "border-accent bg-accent-soft text-accent-strong" : "border-border text-muted hover:border-accent hover:text-accent-strong"
         }`}
       >
         <Upload className="size-4 shrink-0" />

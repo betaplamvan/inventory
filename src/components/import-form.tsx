@@ -52,7 +52,7 @@ export function ImportForm() {
   return (
     <div className="space-y-4">
       <div className="card space-y-3 p-4">
-        <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border px-4 py-5 text-sm text-muted transition hover:border-accent hover:text-accent">
+        <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border px-4 py-5 text-sm text-muted transition hover:border-accent hover:text-accent-strong">
           <FileUp className="size-4 shrink-0" />
           <span className="truncate">{fileName ?? "Chọn file .csv / .tsv / .txt"}</span>
           <input

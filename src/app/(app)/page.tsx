@@ -128,7 +128,7 @@ async function Dashboard() {
         <section className="card min-w-0 p-4">
           <div className="mb-3 flex items-center justify-between">
             <h2 className="font-semibold">Cần mua thêm</h2>
-            <Link href="/items?stock=low" className="-my-2 py-2 text-xs text-accent hover:underline">
+            <Link href="/items?stock=low" className="-my-2 py-2 text-xs text-accent-strong hover:underline">
               Xem tất cả
             </Link>
           </div>
@@ -158,7 +158,7 @@ async function Dashboard() {
         <section className="card min-w-0 p-4">
           <div className="mb-3 flex items-center justify-between">
             <h2 className="font-semibold">Nhập / xuất gần đây</h2>
-            <Link href="/movements" className="-my-2 py-2 text-xs text-accent hover:underline">
+            <Link href="/movements" className="-my-2 py-2 text-xs text-accent-strong hover:underline">
               Xem lịch sử
             </Link>
           </div>
@@ -208,7 +208,7 @@ async function Dashboard() {
                     </div>
                     <div className="h-2 rounded-full bg-surface-2">
                       <div
-                        className="h-2 rounded-full bg-accent transition group-hover:bg-accent-strong"
+                        className="h-2 rounded-full bg-accent transition group-hover:bg-accent-hover"
                         style={{ width: `${Math.max(2, (c.n / maxCat) * 100)}%` }}
                       />
                     </div>

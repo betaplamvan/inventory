@@ -231,7 +231,7 @@ export function ItemForm({
                     return [...a, { key: k, value: "" }];
                   })
                 }
-                className="rounded-md border border-dashed border-border px-2 py-1 text-xs text-muted hover:border-accent hover:text-accent pointer-coarse:min-h-9 pointer-coarse:px-3"
+                className="rounded-md border border-dashed border-border px-2 py-1 text-xs text-muted hover:border-accent hover:text-accent-strong pointer-coarse:min-h-9 pointer-coarse:px-3"
               >
                 + {k}
               </button>
@@ -313,7 +313,7 @@ export function ItemForm({
       {!item && (
         <Section title="Ảnh / video / tài liệu">
           <div className="sm:col-span-2">
-            <label className="flex cursor-pointer flex-col items-center gap-2 rounded-xl border-2 border-dashed border-border px-4 py-8 text-center text-sm text-muted transition hover:border-accent hover:text-accent">
+            <label className="flex cursor-pointer flex-col items-center gap-2 rounded-xl border-2 border-dashed border-border px-4 py-8 text-center text-sm text-muted transition hover:border-accent hover:text-accent-strong">
               <ImagePlus className="size-8" />
               <span>Chụp / chọn ảnh, video hoặc datasheet PDF (có thể chọn nhiều)</span>
               <input
