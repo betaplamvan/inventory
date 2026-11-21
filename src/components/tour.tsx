@@ -104,6 +104,15 @@ export function Tour({ id }: { id: TourId }) {
 
   const step = steps?.[index];
 
+  // Đánh dấu "đang xem hướng dẫn" trên <html>: các lớp nổi (khung trợ lý chat…) tự ẩn đi
+  // để không che phần tử đang được chỉ (globals.css: html[data-tour-active])
+  const active = !!steps;
+  useEffect(() => {
+    if (!active) return;
+    document.documentElement.setAttribute("data-tour-active", "");
+    return () => document.documentElement.removeAttribute("data-tour-active");
+  }, [active]);
+
   // Cuộn tới phần tử của bước hiện tại
   useEffect(() => {
     if (!step) return;

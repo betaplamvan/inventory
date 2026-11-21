@@ -231,3 +231,9 @@ textarea {
   margin: 0.75em 0;
   border-color: var(--border);
 }
+
+/* Đang xem hướng dẫn (components/tour.tsx): ẩn các lớp nổi như khung trợ lý chat để không che
+   phần tử đang được chỉ. Chỉ ẩn bằng CSS — giữ nguyên trạng thái (câu trả lời đang chạy). */
+html[data-tour-active] [data-floating-layer] {
+  display: none;
+}

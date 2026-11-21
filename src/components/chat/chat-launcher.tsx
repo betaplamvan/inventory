@@ -79,7 +79,8 @@ function Launcher() {
   };
 
   return (
-    <div className="print:hidden">
+    // data-floating-layer: tự ẩn khi đang xem hướng dẫn (tour) để không che phần tử được chỉ
+    <div className="print:hidden" data-floating-layer>
       {!open && (
         <button
           type="button"
