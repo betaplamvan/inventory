@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import { AppNav, MobileNav } from "@/components/app-nav";
+import { ChatLauncherSlot } from "@/components/chat/chat-launcher-slot";
 import { LowStockBadge } from "@/components/low-stock-badge";
 import { UserMenu } from "@/components/user-menu";
 
@@ -25,6 +26,7 @@ export default function AppLayout({ children }: LayoutProps<"/">) {
           {children}
         </main>
       </div>
+      <ChatLauncherSlot />
     </div>
   );
 }

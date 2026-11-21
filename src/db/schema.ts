@@ -338,6 +338,53 @@ export const notifySettings = pgTable("notify_settings", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+/* ------------------------------------------------------------------ */
+/* Trợ lý chat (LLM tự host, dùng bộ tool MCP)                         */
+/* ------------------------------------------------------------------ */
+
+/** Lệnh gọi tool trong 1 tin nhắn của trợ lý (định dạng OpenAI: arguments là chuỗi JSON) */
+export type ChatToolCall = { id: string; name: string; arguments: string };
+export type ChatRole = "user" | "assistant" | "tool";
+/** Kết quả tool: ok / lỗi / người dùng từ chối (thao tác ghi cần xác nhận) */
+export type ChatToolStatus = "ok" | "error" | "rejected";
+
+export const chatConversations = pgTable(
+  "chat_conversations",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    ...timestamps,
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("chat_conversations_user_idx").on(t.userId, t.updatedAt)],
+);
+
+/**
+ * Tin nhắn theo đúng thứ tự gửi cho LLM. Lệnh gọi tool ghi chưa có dòng "tool" tương ứng
+ * = đang chờ người dùng xác nhận.
+ */
+export const chatMessages = pgTable(
+  "chat_messages",
+  {
+    id: serial("id").primaryKey(),
+    conversationId: uuid("conversation_id")
+      .notNull()
+      .references(() => chatConversations.id, { onDelete: "cascade" }),
+    role: text("role").$type<ChatRole>().notNull(),
+    content: text("content"),
+    toolCalls: jsonb("tool_calls").$type<ChatToolCall[]>(),
+    /** role = tool: trả lời cho lệnh gọi nào */
+    toolCallId: text("tool_call_id"),
+    toolName: text("tool_name"),
+    toolStatus: text("tool_status").$type<ChatToolStatus>(),
+    ...timestamps,
+  },
+  (t) => [index("chat_messages_conversation_idx").on(t.conversationId, t.id)],
+);
+
 export const categoriesRelations = relations(categories, ({ one, many }) => ({
   parent: one(categories, {
     fields: [categories.parentId],
@@ -402,3 +449,4 @@ export type StockMovement = typeof stockMovements.$inferSelect;
 export type ItemKind = (typeof itemKind.enumValues)[number];
 export type MovementType = (typeof movementType.enumValues)[number];
 export type NotifySettings = typeof notifySettings.$inferSelect;
+export type ChatMessage = typeof chatMessages.$inferSelect;

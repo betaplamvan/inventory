@@ -64,6 +64,13 @@
       "when": 1795145919066,
       "tag": "0008_phase1_trash_source_notify",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1795236028861,
+      "tag": "0009_chat",
+      "breakpoints": true
     }
   ]
 }

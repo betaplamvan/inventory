@@ -22,6 +22,7 @@ App tự quản lý linh kiện, module, dụng cụ và vật tư điện tử.
 - **Thùng rác**: xoá chỉ chuyển vào thùng rác (giữ ảnh và lịch sử), khôi phục được trong 30 ngày rồi tự xoá hẳn
 - **Ghi nguồn thao tác**: mỗi dòng lịch sử ghi rõ đến từ web, agent nào (tên API token / kết nối OAuth) hay nhập file
 - **Cảnh báo sắp hết hàng** qua Telegram và / hoặc email, gửi ngay khi số lượng tụt xuống mức tối thiểu
+- **Trợ lý chat** dùng LLM tự host (llama.cpp / vLLM / Ollama…): hỏi tồn kho, tìm linh kiện, thêm / nhập / xuất bằng lời; thao tác thay đổi dữ liệu luôn chờ bấm xác nhận. Lịch sử lưu theo tài khoản, mở được trên mọi thiết bị
 - **Cài như app (PWA)**: thêm vào màn hình chính, có lối tắt Quét mã / Thêm mặt hàng, nút chụp ảnh thẳng bằng camera
 - **Đăng nhập bằng Google (OAuth)**, mỗi tài khoản có kho riêng. App không lưu mật khẩu (xem mục bên dưới)
 - Giao diện có bản cho điện thoại và chế độ tối, chủ đề vàng đen (logo tủ ngăn kéo, font Be Vietnam Pro). File đi qua Next nên chỉ cần mở **1 cổng** là điện thoại trong mạng LAN dùng được
@@ -174,6 +175,24 @@ https://kho.example.com/api/media/42?thumb=1&t=ml_…
 - Ai giữ URL thì xem được trong thời hạn đó (giống presigned URL), vì trình chat không gửi được cookie đăng nhập kèm ảnh.
 - Thu hồi API token / kết nối thì link tạo từ đó cũng mất hiệu lực.
 
+## Trợ lý chat (LLM tự host)
+
+Trang **Trợ lý** (`/chat`) và nút nổi ở góc màn hình mở khung chat với một LLM bạn tự host. Trợ lý dùng **đúng bộ tool MCP** ở trên (chạy ngay trong app, không qua mạng), nên làm được mọi việc như Claude qua MCP: tìm, xem, thống kê, thêm / sửa, nhập / xuất / kiểm kê, nhập nhiều dòng, chuyển vào thùng rác và khôi phục.
+
+- Tool **đọc** chạy ngay. Tool **ghi** hiện thẻ *Xác nhận / Bỏ qua* (kèm tên mặt hàng và tham số); chỉ chạy khi bấm Xác nhận. Lịch sử nhập / xuất ghi nguồn `agent: Trợ lý chat`.
+- Lịch sử chat lưu trong DB theo tài khoản (bảng `chat_conversations`, `chat_messages`).
+- Cần server có API kiểu OpenAI hỗ trợ **gọi tool** (function calling), ví dụ `llama-server --jinja` với Qwen 2.5 / Qwen 3. Khối `<think>` của model suy luận được ẩn đi.
+
+Cấu hình (bỏ trống `LLM_BASE_URL` = tắt trợ lý, ẩn nút nổi):
+
+```bash
+LLM_BASE_URL=https://llm.example.com   # có hoặc không có /v1
+LLM_API_KEY=…                          # gửi dạng Authorization: Bearer
+LLM_MODEL=                             # bỏ trống = model đầu tiên của /v1/models
+```
+
+Khi deploy: `LLM_API_KEY` là secret, `LLM_BASE_URL` / `LLM_MODEL` là variable (đã có trong `deploy/sync-secrets.sh`).
+
 ## CI/CD
 
 Push lên `main` sẽ build image (GHCR) rồi tự deploy lên máy chủ riêng (self-hosted runner) qua GitHub Actions.
@@ -229,6 +248,9 @@ src/
   app/api/auth/       /google (bắt đầu), /google/callback, /dev-login
   app/api/mcp/        MCP server (Streamable HTTP, Bearer token)
   lib/mcp/server.ts   định nghĩa các tool MCP
+  lib/chat/           trợ lý chat: client LLM (API kiểu OpenAI), vòng lặp gọi tool, lưu hội thoại
+  app/api/chat/       stream câu trả lời (SSE), danh sách / xoá cuộc trò chuyện
+  components/chat/    khung chat, trang /chat, nút nổi
   lib/inventory/      nghiệp vụ ghi dữ liệu dùng chung cho web và MCP (thùng rác, nhập CSV…)
   lib/notify/         cảnh báo sắp hết hàng (Telegram, email)
   proxy.ts            chuyển về /login khi chưa có cookie phiên

@@ -592,7 +592,8 @@ export function buildMcpServer(auth: McpAuth) {
       const id = await findItemId(auth.userId, a);
       const { delta, balance } = await recordMovementFor(auth.userId, id, a.type, a.amount, {
         reference: a.reference,
-        note: a.note ?? "Qua agent (MCP)",
+        // Nguồn (agent nào) đã ghi ở cột source / source_name — không cần ghi chú mặc định
+        note: a.note ?? null,
         unitPrice: a.type === "in" ? a.unitPrice : undefined,
       });
       const it = await getItem(id);

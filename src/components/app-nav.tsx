@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { Suspense, useEffect, useState, type ReactNode } from "react";
 import {
   ArrowLeftRight,
+  Bot,
   Boxes,
   FileUp,
   FolderTree,
@@ -21,6 +22,7 @@ const LINKS = [
   { href: "/", label: "Tổng quan", icon: LayoutDashboard, exact: true },
   { href: "/items", label: "Kho hàng", icon: Boxes },
   { href: "/movements", label: "Nhập / Xuất", icon: ArrowLeftRight },
+  { href: "/chat", label: "Trợ lý", icon: Bot },
   { href: "/scan", label: "Quét mã", icon: ScanLine },
   { href: "/categories", label: "Danh mục", icon: FolderTree },
   { href: "/locations", label: "Vị trí cất", icon: MapPin },
