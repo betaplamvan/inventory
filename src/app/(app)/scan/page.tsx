@@ -9,7 +9,7 @@ export default function ScanPage() {
       <PageHeader
         title="Quét mã"
         tour="scan"
-        description="Quét nhãn QR của kho, mã vạch SKU / MPN trên túi linh kiện, hoặc nhãn vị trí"
+        description="Quét nhãn QR do app in, mã vạch SKU / MPN trên bao bì, hoặc nhãn vị trí cất"
       />
       <Scanner />
     </div>

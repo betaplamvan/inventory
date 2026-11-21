@@ -86,7 +86,7 @@ async function Consent({ searchParams }: { searchParams: PageProps<"/oauth/autho
         </span>
         <h1 className="text-lg font-semibold">Kết nối {client.name}</h1>
         <p className="mt-1 text-sm text-muted">
-          <b className="text-foreground">{client.name}</b> muốn truy cập kho linh kiện của{" "}
+          <b className="text-foreground">{client.name}</b> muốn truy cập Kho đồ (linh kiện, quần áo, thực phẩm) của{" "}
           <b className="text-foreground">{me.email}</b> qua MCP.
         </p>
       </div>
@@ -97,14 +97,14 @@ async function Consent({ searchParams }: { searchParams: PageProps<"/oauth/autho
           <input type="radio" name="scope" value="write" defaultChecked={defaultScope === "write"} className="mt-0.5" />
           <span>
             <b>Đọc + ghi</b>
-            <span className="block text-xs text-muted">Xem, thêm, sửa mặt hàng; nhập / xuất kho; gắn ảnh. Không xoá được.</span>
+            <span className="block text-xs text-muted">Xem, thêm, sửa đồ trong cả 3 kho; nhập / xuất; danh sách cần mua; gắn ảnh; chuyển vào thùng rác (khôi phục được).</span>
           </span>
         </label>
         <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-border p-3 text-sm has-checked:border-accent has-checked:bg-accent-soft/40">
           <input type="radio" name="scope" value="read" defaultChecked={defaultScope === "read"} className="mt-0.5" />
           <span>
             <b>Chỉ đọc</b>
-            <span className="block text-xs text-muted">Chỉ xem dữ liệu kho.</span>
+            <span className="block text-xs text-muted">Chỉ xem dữ liệu của cả 3 kho.</span>
           </span>
         </label>
       </fieldset>

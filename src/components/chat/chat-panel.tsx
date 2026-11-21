@@ -110,8 +110,7 @@ export function ChatPanel({ conversationKey, onCreated, onNotFound, compact, dom
             <div>
               <p className="font-semibold">Trợ lý {cfg.space.toLowerCase()}</p>
               <p className="mt-1 text-sm text-muted">
-                Hỏi về hàng tồn, tìm linh kiện, thêm hay nhập / xuất kho. Thao tác thay đổi dữ liệu luôn chờ bạn bấm xác
-                nhận.
+                {cfg.assistant.intro} Thao tác thay đổi dữ liệu luôn chờ bạn bấm xác nhận.
               </p>
             </div>
             <div className="flex flex-wrap justify-center gap-2">

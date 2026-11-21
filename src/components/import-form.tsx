@@ -27,7 +27,7 @@ async function readText(file: File) {
   return utf8;
 }
 
-export function ImportForm() {
+export function ImportForm({ placeholder }: { placeholder: string }) {
   const [text, setText] = useState("");
   const [fileName, setFileName] = useState<string | null>(null);
   const [onExisting, setOnExisting] = useState<"update" | "skip">("update");
@@ -87,7 +87,7 @@ export function ImportForm() {
             rows={8}
             spellCheck={false}
             className="input font-mono text-xs pointer-coarse:text-sm"
-            placeholder={"Tên,SKU,Số lượng,Vị trí\nTụ gốm 100nF 0805,C-100N,200,Tủ A > Ngăn 1"}
+            placeholder={placeholder}
           />
         </div>
         <div className="grid gap-3 sm:grid-cols-2" data-tour="import-options">

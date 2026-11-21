@@ -196,7 +196,7 @@ function validateItem(data: unknown): ItemInput {
 
 export function buildMcpServer(auth: McpAuth) {
   const server = new McpServer(
-    { name: "kho-linh-kien", version: "2.0.0" },
+    { name: "kho-do", version: "2.0.0" },
     {
       instructions:
         "Kho đồ cá nhân của người dùng, gồm 3 kho (tham số domain): electronics = linh kiện điện tử, " +

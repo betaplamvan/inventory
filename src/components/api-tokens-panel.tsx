@@ -31,7 +31,7 @@ export function ApiTokensPanel({ tokens, mcpUrl }: { tokens: TokenRow[]; mcpUrl:
       <p className="rounded-lg bg-surface-2 px-3 py-2 text-sm text-muted">
         <b className="text-foreground">Claude web / điện thoại:</b> Settings → Connectors → Add custom connector, dán địa chỉ MCP ở
         trên rồi đăng nhập Google để cho phép — không cần token. Claude Code cũng vậy:{" "}
-        <code className="text-xs break-all text-foreground">claude mcp add --transport http kho-linh-kien {mcpUrl}</code> rồi gõ{" "}
+        <code className="text-xs break-all text-foreground">claude mcp add --transport http kho-do {mcpUrl}</code> rồi gõ{" "}
         <code className="text-xs text-foreground">/mcp</code> để đăng nhập. Kết nối OAuth hiện trong danh sách bên dưới.
       </p>
 
@@ -108,16 +108,16 @@ export function ApiTokensPanel({ tokens, mcpUrl }: { tokens: TokenRow[]; mcpUrl:
 }
 
 function NewTokenCard({ token, mcpUrl, scope }: { token: string; mcpUrl: string; scope: "read" | "write" }) {
-  const claudeCode = `claude mcp add --transport http kho-linh-kien ${mcpUrl} --header "Authorization: Bearer ${token}"`;
+  const claudeCode = `claude mcp add --transport http kho-do ${mcpUrl} --header "Authorization: Bearer ${token}"`;
   const jsonConfig = JSON.stringify(
-    { mcpServers: { "kho-linh-kien": { type: "http", url: mcpUrl, headers: { Authorization: `Bearer ${token}` } } } },
+    { mcpServers: { "kho-do": { type: "http", url: mcpUrl, headers: { Authorization: `Bearer ${token}` } } } },
     null,
     2,
   );
   const desktopConfig = JSON.stringify(
     {
       mcpServers: {
-        "kho-linh-kien": {
+        "kho-do": {
           command: "npx",
           args: ["-y", "mcp-remote", mcpUrl, "--header", "Authorization:${INVENTORY_AUTH}"],
           env: { INVENTORY_AUTH: `Bearer ${token}` },

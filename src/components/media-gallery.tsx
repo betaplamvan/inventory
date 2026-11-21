@@ -151,8 +151,8 @@ export function MediaGallery({ itemId, media, coverId }: { itemId: number; media
         }`}
       >
         <Upload className="size-4 shrink-0" />
-        <span className="can-hover:hidden">Chọn ảnh, video, datasheet</span>
-        <span className="hidden can-hover:inline">Thêm ảnh / video / datasheet (kéo thả hoặc bấm để chọn)</span>
+        <span className="can-hover:hidden">Chọn ảnh, video, tài liệu PDF</span>
+        <span className="hidden can-hover:inline">Thêm ảnh / video / tài liệu PDF (kéo thả hoặc bấm để chọn)</span>
         <input
           type="file"
           multiple

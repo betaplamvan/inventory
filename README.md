@@ -122,7 +122,7 @@ App có sẵn **MCP server** (Streamable HTTP) tại `<APP_BASE_URL>/api/mcp`. C
 2. Claude mở trang đăng nhập Google của app → chọn quyền (*đọc + ghi* / *chỉ đọc*) → **Cho phép**.
 3. Connector tự có trên app điện thoại cùng tài khoản. Kết nối hiện trong **Tài khoản → API token** (nhãn OAuth), thu hồi ở đó.
 
-Claude Code cũng dùng được OAuth: `claude mcp add --transport http kho-linh-kien https://kho.example.com/api/mcp` rồi gõ `/mcp` để đăng nhập.
+Claude Code cũng dùng được OAuth: `claude mcp add --transport http kho-do https://kho.example.com/api/mcp` rồi gõ `/mcp` để đăng nhập.
 
 Chi tiết kỹ thuật: theo đặc tả MCP Authorization — metadata ở `/.well-known/oauth-protected-resource` và `/.well-known/oauth-authorization-server`, đăng ký client động `/api/oauth/register`, trang đồng ý `/oauth/authorize` (bắt buộc PKCE S256), token `/api/oauth/token`. Access token sống 1 giờ, refresh token 90 ngày (xoay vòng mỗi lần dùng).
 
@@ -136,7 +136,7 @@ Chi tiết kỹ thuật: theo đặc tả MCP Authorization — metadata ở `/.
 2. Chép lệnh cấu hình hiện ngay dưới token. Với Claude Code:
 
    ```bash
-   claude mcp add --transport http kho-linh-kien https://kho.example.com/api/mcp      --header "Authorization: Bearer inv_…"
+   claude mcp add --transport http kho-do https://kho.example.com/api/mcp      --header "Authorization: Bearer inv_…"
    ```
 
 | Tool | Việc |
@@ -215,7 +215,7 @@ Xem [deploy/README.md](deploy/README.md).
 
 ## Ủng hộ tác giả
 
-Kho linh kiện miễn phí và mã nguồn mở. Nếu app có ích cho bạn, dù dùng bản có sẵn hay tự deploy, có thể mời tác giả một ly cà phê hoặc tặng repo một sao. Cảm ơn bạn!
+Kho đồ miễn phí và mã nguồn mở. Nếu app có ích cho bạn, dù dùng bản có sẵn hay tự deploy, có thể mời tác giả một ly cà phê hoặc tặng repo một sao. Cảm ơn bạn!
 
 <img src="docs/support-qr.png" alt="Mã VietQR ủng hộ tác giả" width="200" height="200">
 

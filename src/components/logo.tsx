@@ -1,5 +1,5 @@
 /**
- * Logo Kho linh kiện: tủ ngăn kéo có nhãn dán. Màu theo chế độ sáng / tối qua biến --logo-* trong globals.css
+ * Logo Kho đồ: tủ ngăn kéo có nhãn dán. Màu theo chế độ sáng / tối qua biến --logo-* trong globals.css
  * (sáng: nền đen, nét trắng, nhãn vàng; tối: nền vàng, nét đen).
  * Icon app / favicon (public/icons, src/app/favicon.ico) vẽ cùng hình này — sửa thì sửa cả scripts/gen-icons.mjs.
  */

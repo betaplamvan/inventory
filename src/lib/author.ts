@@ -1,5 +1,5 @@
 /**
- * Thông tin tác giả Kho linh kiện, hiện ở trang "Ủng hộ tác giả" (/support) trên MỌI bản deploy,
+ * Thông tin tác giả Kho đồ, hiện ở trang "Ủng hộ tác giả" (/support) trên MỌI bản deploy,
  * kể cả bản người khác clone về tự chạy. Tiền ủng hộ đi thẳng tới tác giả, không qua máy chủ nào.
  *
  * Bạn fork dự án? Cứ giữ nguyên để ủng hộ tác giả gốc nếu muốn — cảm ơn bạn!

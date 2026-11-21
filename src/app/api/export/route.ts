@@ -2,6 +2,9 @@ import { type NextRequest, NextResponse } from "next/server";
 import { getCategoryTree, getLocationTree, listAllItems, type StockFilter } from "@/lib/queries";
 import { getCurrentUser } from "@/lib/auth/session";
 import { currentDomain } from "@/lib/domain-server";
+import { DOMAIN_CONFIG, type Domain } from "@/lib/domains";
+
+const FILE_SLUG: Record<Domain, string> = { electronics: "linh-kien", wardrobe: "quan-ao", pantry: "thuc-pham" };
 import { KIND_LABELS } from "@/lib/constants";
 import { toCsv } from "@/lib/csv";
 import { CSV_HEADER } from "@/lib/inventory/import";
@@ -26,35 +29,12 @@ export async function GET(req: NextRequest) {
   const sp = req.nextUrl.searchParams;
 
   if (sp.has("template")) {
+    // File mẫu theo kho đang chọn (linh kiện / quần áo / thực phẩm)
+    const d = await currentDomain();
     const example = (o: Record<string, unknown>) => CSV_HEADER.map((h) => o[h] ?? "");
     return csvResponse(
-      toCsv([
-        CSV_HEADER,
-        example({
-          Tên: "Tụ gốm 100nF 0805",
-          SKU: "C-100N-0805",
-          Loại: KIND_LABELS.component,
-          "Danh mục": "Tụ điện > Tụ gốm",
-          "Vị trí": "Tủ A > Ngăn 1",
-          "Mã nhà SX (MPN)": "CL21B104KBCNNNC",
-          Package: "0805",
-          "Số lượng": 200,
-          "Đơn vị": "cái",
-          "Tối thiểu": 50,
-          "Đơn giá": 150,
-          "Nhà cung cấp": "LCSC",
-          Tags: "smd, decoupling",
-          "Thông số": "Điện dung: 100nF; Điện áp: 50V",
-        }),
-        example({
-          Tên: "Mỏ hàn 60W",
-          Loại: KIND_LABELS.tool,
-          "Vị trí": "Kệ dụng cụ",
-          "Số lượng": 1,
-          "Đơn vị": "cái",
-        }),
-      ]),
-      "mau-nhap-kho.csv",
+      toCsv([CSV_HEADER, ...DOMAIN_CONFIG[d].importExample.rows.map(example)]),
+      `mau-nhap-${FILE_SLUG[d]}.csv`,
     );
   }
 
@@ -84,5 +64,6 @@ export async function GET(req: NextRequest) {
   ]);
 
   const date = new Date().toISOString().slice(0, 10);
-  return csvResponse(toCsv([CSV_HEADER, ...lines]), `kho-linh-kien-${date}.csv`);
+  // vd. kho-do-quan-ao-2026-11-21.csv
+  return csvResponse(toCsv([CSV_HEADER, ...lines]), `kho-do-${FILE_SLUG[domain]}-${date}.csv`);
 }

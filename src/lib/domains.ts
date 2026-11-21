@@ -42,6 +42,8 @@ export type DomainConfig = {
   showExpiry: boolean;
   placeholders: { name: string; sku: string; tags: string; supplier: string; location: string };
   supplierSuggestions: string[];
+  /** Ví dụ cho trang Nhập từ file: đường dẫn danh mục, dòng dán mẫu, 2 dòng của file mẫu CSV */
+  importExample: { path: string; paste: string; rows: Record<string, string | number>[] };
   /** Danh mục tạo sẵn: [cha, [con…]] */
   categoryPresets: [string, string[]][];
   /** Vị trí tạo sẵn */
@@ -87,6 +89,29 @@ const ELECTRONICS: DomainConfig = {
     location: "Tủ A › Ngăn 3",
   },
   supplierSuggestions: ["Ban Linh Kiện", "Hshop", "Điện Tử Tương Lai", "Shopee", "LCSC", "AliExpress"],
+  importExample: {
+    path: "Tụ điện > Tụ gốm",
+    paste: "Tên,SKU,Số lượng,Vị trí\nTụ gốm 100nF 0805,C-100N,200,Tủ A > Ngăn 1",
+    rows: [
+      {
+        Tên: "Tụ gốm 100nF 0805",
+        SKU: "C-100N-0805",
+        Loại: "Linh kiện",
+        "Danh mục": "Tụ điện > Tụ gốm",
+        "Vị trí": "Tủ A > Ngăn 1",
+        "Mã nhà SX (MPN)": "CL21B104KBCNNNC",
+        Package: "0805",
+        "Số lượng": 200,
+        "Đơn vị": "cái",
+        "Tối thiểu": 50,
+        "Đơn giá": 150,
+        "Nhà cung cấp": "LCSC",
+        Tags: "smd, decoupling",
+        "Thông số": "Điện dung: 100nF; Điện áp: 50V",
+      },
+      { Tên: "Mỏ hàn 60W", Loại: "Dụng cụ", "Vị trí": "Kệ dụng cụ", "Số lượng": 1, "Đơn vị": "cái" },
+    ],
+  },
   categoryPresets: [
     ["Điện trở", ["Điện trở cắm (THT)", "Điện trở dán (SMD)", "Biến trở / Triết áp"]],
     ["Tụ điện", ["Tụ gốm", "Tụ hoá", "Tụ tantalum", "Tụ film"]],
@@ -159,6 +184,24 @@ const WARDROBE: DomainConfig = {
     location: "Tủ quần áo › Ngăn kéo 2",
   },
   supplierSuggestions: ["Uniqlo", "Zara", "H&M", "Routine", "Shopee", "Lazada"],
+  importExample: {
+    path: "Áo > Sơ mi",
+    paste: "Tên,Số lượng,Vị trí,Thông số\nSơ mi oxford trắng,2,Tủ quần áo > Ngăn treo,Màu: trắng; Size: M",
+    rows: [
+      {
+        Tên: "Sơ mi oxford trắng",
+        Loại: "Áo",
+        "Danh mục": "Áo > Sơ mi",
+        "Vị trí": "Tủ quần áo > Ngăn treo",
+        Hãng: "Uniqlo",
+        "Số lượng": 2,
+        "Đơn vị": "chiếc",
+        Tags: "công sở, cơ bản",
+        "Thông số": "Màu: trắng; Size: M; Chất liệu: cotton oxford; Mùa: quanh năm",
+      },
+      { Tên: "Giày sneaker trắng", Loại: "Giày dép", "Vị trí": "Kệ giày", "Số lượng": 1, "Đơn vị": "đôi", "Thông số": "Size: 41" },
+    ],
+  },
   categoryPresets: [
     ["Áo", ["Áo thun", "Sơ mi", "Áo len", "Áo polo"]],
     ["Quần", ["Quần jean", "Quần kaki", "Quần short", "Quần âu"]],
@@ -223,6 +266,25 @@ const PANTRY: DomainConfig = {
     location: "Tủ lạnh › Ngăn mát",
   },
   supplierSuggestions: ["Bách Hoá Xanh", "WinMart", "Co.op Mart", "Chợ", "Shopee", "GrabMart"],
+  importExample: {
+    path: "Tủ lạnh > Ngăn mát",
+    paste: "Tên,Số lượng,Đơn vị,Hạn sử dụng,Vị trí\nTrứng gà,10,quả,28/11/2026,Tủ lạnh > Ngăn mát",
+    rows: [
+      {
+        Tên: "Trứng gà",
+        Loại: "Thịt cá trứng",
+        "Danh mục": "Thịt cá trứng > Trứng",
+        "Vị trí": "Tủ lạnh > Ngăn mát",
+        "Số lượng": 10,
+        "Đơn vị": "quả",
+        "Tối thiểu": 4,
+        "Đơn giá": 3500,
+        "Nhà cung cấp": "Bách Hoá Xanh",
+        "Hạn sử dụng": "28/11/2026",
+      },
+      { Tên: "Gạo ST25", Loại: "Gạo & đồ khô", "Vị trí": "Kệ đồ khô", "Số lượng": 5, "Đơn vị": "kg" },
+    ],
+  },
   categoryPresets: [
     ["Rau củ quả", ["Rau lá", "Củ", "Trái cây"]],
     ["Thịt cá trứng", ["Thịt", "Hải sản", "Trứng", "Đậu phụ"]],

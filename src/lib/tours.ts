@@ -105,7 +105,7 @@ export const TOURS: Record<TourId, TourStep[]> = {
     {
       target: "item-media",
       title: "Ảnh và tài liệu",
-      body: "Chụp ảnh bằng camera, thêm video hoặc datasheet. Ảnh đầu tiên tự thành ảnh đại diện.",
+      body: "Chụp ảnh bằng camera, thêm video hoặc tài liệu PDF (datasheet, hoá đơn…). Ảnh đầu tiên tự thành ảnh đại diện.",
     },
     {
       target: "item-actions",
@@ -182,7 +182,7 @@ export const TOURS: Record<TourId, TourStep[]> = {
     {
       target: "tax-add",
       title: "Thêm danh mục",
-      body: "Danh mục lồng được nhiều cấp, VD Tụ điện › Tụ gốm.",
+      body: "Danh mục lồng được nhiều cấp, VD Tụ điện › Tụ gốm, Áo › Sơ mi. Mỗi kho có danh mục riêng.",
     },
     {
       target: "tax-list",
