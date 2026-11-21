@@ -1,0 +1,47 @@
+# SearXNG tự host — công cụ tìm kiếm cho tool web_search của trợ lý chat.
+# Chỉ chạy trong docker network nội bộ (cùng network với container app "inventory"), KHÔNG mở cổng ra ngoài:
+# app gọi http://searxng:8080, không ai khác trên internet dùng được.
+#
+#   cd deploy/searxng
+#   echo "SEARXNG_SECRET=$(openssl rand -hex 32)" > .env
+#   docker compose up -d
+#
+# Rồi đặt variable SEARCH_URL=http://searxng:8080 cho app (deploy/.env.production → sync-secrets.sh) và deploy lại.
+
+name: searxng
+
+services:
+  searxng:
+    image: docker.io/searxng/searxng:latest
+    container_name: searxng
+    restart: unless-stopped
+    environment:
+      SEARXNG_BASE_URL: http://searxng:8080/
+      # Khoá ký cookie / token nội bộ của SearXNG — bắt buộc đổi khỏi mặc định
+      SEARXNG_SECRET: ${SEARXNG_SECRET:?Đặt SEARXNG_SECRET trong deploy/searxng/.env (openssl rand -hex 32)}
+    volumes:
+      - ./settings.yml:/etc/searxng/settings.yml:ro
+    networks:
+      - app
+    # Không publish cổng. Muốn thử trên chính máy chủ: bỏ comment rồi mở http://127.0.0.1:8888
+    # ports:
+    #   - "127.0.0.1:8888:8080"
+    mem_limit: 512m
+    cpus: 1
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETGID
+      - SETUID
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  app:
+    # Network của container app (biến DOCKER_NETWORK khi deploy, mặc định local-services)
+    name: ${DOCKER_NETWORK:-local-services}
+    external: true

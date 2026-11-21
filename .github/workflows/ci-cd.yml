@@ -107,6 +107,7 @@ jobs:
             MINIO_BUCKET GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET APP_BASE_URL COOKIE_SECURE MAX_UPLOAD_MB
             TELEGRAM_BOT_TOKEN SMTP_HOST SMTP_PORT SMTP_USER SMTP_PASS SMTP_FROM
             LLM_BASE_URL LLM_API_KEY LLM_MODEL
+            SEARCH_URL
           # Bí mật → secrets; cấu hình không nhạy cảm → vars (Environment "production").
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           MINIO_ACCESS_KEY: ${{ secrets.MINIO_ACCESS_KEY }}
@@ -129,6 +130,7 @@ jobs:
           SMTP_FROM: ${{ vars.SMTP_FROM }}
           LLM_BASE_URL: ${{ vars.LLM_BASE_URL }}
           LLM_MODEL: ${{ vars.LLM_MODEL }}
+          SEARCH_URL: ${{ vars.SEARCH_URL }}
         run: |
           export IMAGE="${IMAGE,,}"
           bash deploy/deploy-container.sh

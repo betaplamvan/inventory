@@ -1,0 +1,31 @@
+# Cấu hình SearXNG cho trợ lý Kho đồ — chỉ ghi đè vài mục, còn lại dùng mặc định của SearXNG.
+# Tài liệu: https://docs.searxng.org/admin/settings/index.html
+use_default_settings: true
+
+general:
+  instance_name: "Kho đồ search"
+  enable_metrics: false
+
+server:
+  # secret_key lấy từ biến môi trường SEARXNG_SECRET (docker-compose.yml)
+  # Chỉ dùng nội bộ (app gọi qua docker network) → không cần bộ giới hạn chống bot (cần thêm Valkey/Redis)
+  limiter: false
+  public_instance: false
+  image_proxy: false
+  method: "GET"
+
+search:
+  safe_search: 0
+  autocomplete: ""
+  default_lang: "auto"
+  # json: app gọi /search?format=json — mặc định SearXNG chỉ bật html
+  formats:
+    - html
+    - json
+
+ui:
+  static_use_hash: true
+
+outgoing:
+  request_timeout: 4.0
+  max_request_timeout: 8.0

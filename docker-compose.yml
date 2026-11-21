@@ -34,6 +34,20 @@ services:
     volumes:
       - miniodata:/data
 
+  # Tìm kiếm web cho trợ lý chat (tool web_search) — khi dev: `docker compose --profile search up -d searxng`
+  # rồi đặt SEARCH_URL=http://localhost:8888 trong .env. Production: xem deploy/searxng/.
+  searxng:
+    profiles: ["search"]
+    image: docker.io/searxng/searxng:latest
+    restart: unless-stopped
+    environment:
+      SEARXNG_BASE_URL: http://localhost:8888/
+      SEARXNG_SECRET: ${SEARXNG_SECRET:-dev-only-secret-change-me}
+    volumes:
+      - ./deploy/searxng/settings.yml:/etc/searxng/settings.yml:ro
+    ports:
+      - "127.0.0.1:8888:8080"
+
   # App chạy production trong Docker: `docker compose --profile app up -d --build`
   app:
     profiles: ["app"]

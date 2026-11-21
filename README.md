@@ -208,6 +208,10 @@ LLM_MODEL=                             # bỏ trống = model đầu tiên của
 
 Khi deploy: `LLM_API_KEY` là secret, `LLM_BASE_URL` / `LLM_MODEL` là variable (đã có trong `deploy/sync-secrets.sh`).
 
+### Tra web (tuỳ chọn)
+
+Đặt `SEARCH_URL` trỏ tới một [SearXNG](https://docs.searxng.org/) tự host thì trợ lý có thêm `web_search` (tìm) và `read_webpage` (đọc trang) — tra datasheet / sơ đồ chân, công thức món ăn, mẹo phối đồ, giá bán… và ghi nguồn bằng link. Tool chỉ đọc nên chạy ngay, tối đa 8 lần tra mỗi lượt; `read_webpage` chặn mọi địa chỉ nội bộ (localhost, LAN, Tailscale…). Cấu hình và cách chạy SearXNG: [deploy/searxng/](deploy/searxng/README.md). Khi dev: `docker compose --profile search up -d searxng` rồi `SEARCH_URL=http://localhost:8888`.
+
 ## CI/CD
 
 Push lên `main` sẽ build image (GHCR) rồi tự deploy lên máy chủ riêng (self-hosted runner) qua GitHub Actions.
