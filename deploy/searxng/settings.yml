@@ -5,6 +5,8 @@ use_default_settings: true
 general:
   instance_name: "Kho đồ search"
   enable_metrics: false
+  # Wikipedia / Wikidata / OpenStreetMap yêu cầu có địa chỉ liên hệ (gửi kèm User-Agent), thiếu thì không bật được
+  contact_url: "https://github.com/betaplamvan/inventory"
 
 server:
   # secret_key lấy từ biến môi trường SEARXNG_SECRET (docker-compose.yml)

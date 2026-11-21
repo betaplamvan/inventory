@@ -35,7 +35,11 @@ export async function webSearch(query: string, opts: { language?: string; limit?
   if (opts.language && opts.language !== "auto") u.searchParams.set("language", opts.language);
   let res: Response;
   try {
-    res = await fetch(u, { headers: { Accept: "application/json" }, signal: AbortSignal.timeout(TIMEOUT_MS) });
+    res = await fetch(u, {
+      // X-Real-IP: SearXNG (bot detection) ghi lỗi nếu request không có IP nguồn — app gọi nội bộ nên đặt cố định
+      headers: { Accept: "application/json", "X-Real-IP": "127.0.0.1" },
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    });
   } catch (err) {
     throw new WebError(`Không kết nối được máy tìm kiếm: ${(err as Error).message}`);
   }

@@ -11,6 +11,7 @@ import {
 } from "@/db/schema";
 import { TRASH_DAYS } from "@/lib/inventory/trash";
 import { DOMAIN_CONFIG, type Domain } from "@/lib/domains";
+import { normalizeText } from "@/lib/format";
 import { LlmError, streamChat, type LlmMessage } from "./llm";
 import { openToolset, toolCatalog, type ToolMeta } from "./tools";
 import type { ChatDecision, ChatStreamEvent, ConversationSummary, UiMessage, UiToolCall } from "./types";
@@ -224,6 +225,34 @@ function withToday(messages: LlmMessage[]): LlmMessage[] {
   });
 }
 
+/** Người dùng yêu cầu rõ tìm trên mạng ("tìm trên mạng", "tra google", "web search", "search online"…) */
+export function wantsWebSearch(text: string) {
+  const t = normalizeText(text);
+  return (
+    /\b(web ?search|google|internet|online)\b/.test(t) ||
+    /\b(tim|tra|search|kiem|tim kiem|tra cuu|xem)\b.{0,40}\b(tren mang|tren web|tren internet|mang|web)\b/.test(t)
+  );
+}
+
+/** Nhờ model viết 1 câu truy vấn tìm kiếm từ vài tin nhắn gần nhất (gọi ngắn, không kèm tool) */
+async function webQueryFor(history: ChatMessage[], message: string, signal: AbortSignal) {
+  const recent = history
+    .filter((r) => r.role !== "tool" && r.content)
+    .slice(-6)
+    .map((r) => `${r.role === "user" ? "Người dùng" : "Trợ lý"}: ${r.content!.replace(/\s+/g, " ").slice(0, 600)}`)
+    .join("\n");
+  const prompt =
+    `Hội thoại gần đây:\n${recent}\n\n` +
+    "Viết MỘT câu truy vấn tìm kiếm Google (tối đa 12 từ; tiếng Việt, hoặc tiếng Anh nếu là câu hỏi kỹ thuật) để trả lời " +
+    "yêu cầu mới nhất của người dùng, kèm các từ khoá quan trọng từ ngữ cảnh. Chỉ trả về câu truy vấn, không giải thích.";
+  let q = "";
+  for await (const ev of streamChat({ messages: [{ role: "user", content: prompt }], signal })) {
+    if (ev.type === "text") q += ev.delta;
+  }
+  q = (q.trim().split("\n")[0] ?? "").replace(/^["'`*\s-]+|["'`*\s.]+$/g, "").slice(0, 200);
+  return q || message.replace(/\s+/g, " ").slice(0, 200);
+}
+
 /** Lịch sử → tin nhắn cho LLM; bắt đầu từ 1 tin của người dùng để không có kết quả tool mồ côi */
 function toLlmMessages(rows: ChatMessage[]): LlmMessage[] {
   let start = Math.max(0, rows.length - MAX_HISTORY);
@@ -346,6 +375,36 @@ export async function* runChat(opts: {
           parts: [{ type: "text", text: message }],
         },
       };
+    }
+
+    // 2b. Người dùng bảo rõ "tìm trên mạng" → app tự tìm trước (model nhỏ hay giả vờ đã tìm mà không gọi tool,
+    // còn llama.cpp bỏ qua tool_choice ép tool). Lưu như một lần gọi tool bình thường để model và giao diện đều thấy.
+    if (message && toolset.meta.has("web_search") && wantsWebSearch(message)) {
+      yield { type: "thinking" };
+      let query: string;
+      try {
+        query = await webQueryFor(await loadMessages(conversationId), message, signal);
+      } catch (err) {
+        if (signal.aborted) return;
+        throw err;
+      }
+      const call: ChatToolCall = {
+        id: `call_web_${Date.now().toString(36)}`,
+        name: "web_search",
+        arguments: JSON.stringify({ query }),
+      };
+      await saveRow({ conversationId, role: "assistant", content: null, toolCalls: [call] });
+      yield { type: "tool_call", call: uiCall(call, toolset.meta.get("web_search")) };
+      const { status, text: result } = await toolset.call("web_search", { query });
+      await saveRow({
+        conversationId,
+        role: "tool",
+        toolCallId: call.id,
+        toolName: call.name,
+        toolStatus: status,
+        content: result,
+      });
+      yield { type: "tool_result", id: call.id, status, result };
     }
 
     // 3. Gọi model, chạy tool đọc, dừng khi gặp thao tác ghi cần xác nhận
