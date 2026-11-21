@@ -282,7 +282,7 @@ export async function* runChat(opts: {
       await saveRow({
         conversationId,
         role: "tool",
-        toolCallId: c.id,``
+        toolCallId: c.id,
         toolName: c.name,
         toolStatus: status,
         content: text,
