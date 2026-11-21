@@ -2,6 +2,7 @@ import {
   type AnyPgColumn,
   bigint,
   boolean,
+  date,
   index,
   integer,
   jsonb,
@@ -17,13 +18,38 @@ import {
 } from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
 
+/**
+ * Lĩnh vực ("kho"): mỗi tài khoản có 3 kho dùng chung app — linh kiện điện tử, tủ quần áo, tủ bếp.
+ * Mặt hàng / danh mục / vị trí / cuộc trò chuyện thuộc đúng 1 kho. Cấu hình hiển thị: lib/domains.ts
+ */
+export const domainEnum = pgEnum("domain", ["electronics", "wardrobe", "pantry"]);
+export type Domain = (typeof domainEnum.enumValues)[number];
+
+/** Loại mặt hàng — mỗi kho dùng một nhóm loại (lib/domains.ts); "other" dùng chung */
 export const itemKind = pgEnum("item_kind", [
+  // Điện tử
   "component", // Linh kiện
   "module", // Module / board
   "tool", // Dụng cụ
   "consumable", // Vật tư tiêu hao
   "equipment", // Thiết bị / máy đo
   "other",
+  // Quần áo
+  "top", // Áo
+  "bottom", // Quần / chân váy
+  "dress", // Váy liền / đầm
+  "outerwear", // Áo khoác
+  "shoes", // Giày dép
+  "accessory", // Phụ kiện (túi, mũ, thắt lưng, trang sức…)
+  // Thực phẩm
+  "produce", // Rau củ quả
+  "protein", // Thịt, cá, trứng, đậu phụ
+  "dairy", // Sữa và chế phẩm
+  "grain", // Gạo, mì, đồ khô
+  "spice", // Gia vị, nước chấm
+  "drink", // Đồ uống
+  "snack", // Đồ ăn vặt
+  "cooked", // Món đã nấu / đồ ăn thừa
 ]);
 
 export const movementType = pgEnum("movement_type", ["in", "out", "adjust"]);
@@ -202,6 +228,7 @@ export const categories = pgTable(
   {
     id: serial("id").primaryKey(),
     userId: owner(),
+    domain: domainEnum("domain").notNull().default("electronics"),
     name: text("name").notNull(),
     parentId: integer("parent_id").references((): AnyPgColumn => categories.id, {
       onDelete: "set null",
@@ -210,7 +237,7 @@ export const categories = pgTable(
     sortOrder: integer("sort_order").notNull().default(0),
     ...timestamps,
   },
-  (t) => [index("categories_user_idx").on(t.userId)],
+  (t) => [index("categories_user_idx").on(t.userId, t.domain)],
 );
 
 export const locations = pgTable(
@@ -218,6 +245,7 @@ export const locations = pgTable(
   {
     id: serial("id").primaryKey(),
     userId: owner(),
+    domain: domainEnum("domain").notNull().default("electronics"),
     name: text("name").notNull(),
     code: text("code"),
     parentId: integer("parent_id").references((): AnyPgColumn => locations.id, {
@@ -226,7 +254,7 @@ export const locations = pgTable(
     description: text("description"),
     ...timestamps,
   },
-  (t) => [index("locations_user_idx").on(t.userId)],
+  (t) => [index("locations_user_idx").on(t.userId, t.domain)],
 );
 
 export type Spec = { key: string; value: string };
@@ -236,6 +264,7 @@ export const items = pgTable(
   {
     id: serial("id").primaryKey(),
     userId: owner(),
+    domain: domainEnum("domain").notNull().default("electronics"),
     name: text("name").notNull(),
     sku: text("sku"),
     kind: itemKind("kind").notNull().default("component"),
@@ -255,6 +284,8 @@ export const items = pgTable(
     purchaseUrl: text("purchase_url"),
     datasheetUrl: text("datasheet_url"),
     notes: text("notes"),
+    /** Hạn sử dụng (kho thực phẩm) — ngày, không giờ */
+    expiresAt: date("expires_at", { mode: "string" }),
     coverMediaId: integer("cover_media_id").references((): AnyPgColumn => media.id, {
       onDelete: "set null",
     }),
@@ -268,7 +299,7 @@ export const items = pgTable(
     deletedBy: text("deleted_by"),
   },
   (t) => [
-    index("items_user_idx").on(t.userId),
+    index("items_user_idx").on(t.userId, t.domain),
     // SKU chỉ cần không trùng giữa các mặt hàng đang dùng — món trong thùng rác không giữ chỗ
     uniqueIndex("items_user_sku_uq").on(t.userId, t.sku).where(sql`deleted_at is null`),
     index("items_category_idx").on(t.categoryId),
@@ -355,6 +386,8 @@ export const chatConversations = pgTable(
     userId: uuid("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
+    /** Kho mà cuộc trò chuyện thuộc về — quyết định vai trò trợ lý (mạch DIY / phối đồ / nấu ăn) */
+    domain: domainEnum("domain").notNull().default("electronics"),
     title: text("title").notNull(),
     ...timestamps,
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
@@ -383,6 +416,33 @@ export const chatMessages = pgTable(
     ...timestamps,
   },
   (t) => [index("chat_messages_conversation_idx").on(t.conversationId, t.id)],
+);
+
+/**
+ * Danh sách cần mua của từng kho: người dùng / trợ lý thêm vào (vd. linh kiện còn thiếu cho mạch,
+ * món đồ để hoàn thiện bộ phối, nguyên liệu cho món ăn). itemId: gắn với mặt hàng sẵn có trong kho
+ * → khi đánh dấu đã mua có thể nhập kho luôn.
+ */
+export const shoppingItems = pgTable(
+  "shopping_items",
+  {
+    id: serial("id").primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    domain: domainEnum("domain").notNull(),
+    name: text("name").notNull(),
+    quantity: qty("quantity"),
+    unit: text("unit"),
+    note: text("note"),
+    itemId: integer("item_id").references((): AnyPgColumn => items.id, { onDelete: "set null" }),
+    done: boolean("done").notNull().default(false),
+    doneAt: timestamp("done_at", { withTimezone: true }),
+    /** Ai thêm: "web" hoặc "agent: <tên>" */
+    addedBy: text("added_by"),
+    ...timestamps,
+  },
+  (t) => [index("shopping_items_user_idx").on(t.userId, t.domain)],
 );
 
 export const categoriesRelations = relations(categories, ({ one, many }) => ({
@@ -450,3 +510,4 @@ export type ItemKind = (typeof itemKind.enumValues)[number];
 export type MovementType = (typeof movementType.enumValues)[number];
 export type NotifySettings = typeof notifySettings.$inferSelect;
 export type ChatMessage = typeof chatMessages.$inferSelect;
+export type ShoppingItem = typeof shoppingItems.$inferSelect;

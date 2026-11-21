@@ -1,7 +1,9 @@
 import { countLowStock } from "@/lib/queries";
+import { currentDomain } from "@/lib/domain-server";
 
+/** Số mặt hàng sắp hết của kho đang chọn (cạnh mục "Kho hàng" trong menu) */
 export async function LowStockBadge() {
-  const n = await countLowStock().catch(() => 0);
+  const n = await countLowStock(await currentDomain()).catch(() => 0);
   if (!n) return null;
   return (
     <span

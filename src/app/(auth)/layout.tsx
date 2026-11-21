@@ -6,7 +6,7 @@ export default function AuthLayout({ children }: LayoutProps<"/">) {
     <div className="flex min-h-dvh flex-col items-center justify-center px-4 py-10">
       <Link href="/" className="mb-6 flex items-center gap-2.5 text-lg font-bold tracking-tight">
         <Logo className="size-10" />
-        Kho linh kiện
+        Kho đồ
       </Link>
       <div className="card w-full max-w-sm p-6 shadow-sm">{children}</div>
     </div>

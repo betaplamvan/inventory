@@ -4,9 +4,9 @@ import type { MetadataRoute } from "next";
 export default function manifest(): MetadataRoute.Manifest {
   return {
     id: "/",
-    name: "Kho linh kiện",
+    name: "Kho đồ",
     short_name: "Kho",
-    description: "Quản lý linh kiện, dụng cụ và vật tư điện tử cá nhân",
+    description: "Quản lý linh kiện điện tử, tủ quần áo và tủ bếp — kèm trợ lý gợi ý mạch DIY, phối đồ, món ăn",
     lang: "vi",
     start_url: "/",
     scope: "/",
@@ -21,7 +21,8 @@ export default function manifest(): MetadataRoute.Manifest {
     ],
     shortcuts: [
       { name: "Quét mã", short_name: "Quét", url: "/scan", icons: [{ src: "/icons/icon-192.png", sizes: "192x192" }] },
-      { name: "Thêm mặt hàng", short_name: "Thêm", url: "/items/new", icons: [{ src: "/icons/icon-192.png", sizes: "192x192" }] },
+      { name: "Thêm mới", short_name: "Thêm", url: "/items/new", icons: [{ src: "/icons/icon-192.png", sizes: "192x192" }] },
+      { name: "Cần mua", url: "/shopping", icons: [{ src: "/icons/icon-192.png", sizes: "192x192" }] },
       { name: "Kho hàng", url: "/items", icons: [{ src: "/icons/icon-192.png", sizes: "192x192" }] },
     ],
   };

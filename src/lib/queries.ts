@@ -8,6 +8,7 @@ import {
   media,
   stockMovements,
   type Category,
+  type Domain,
   type ItemKind,
   type Location,
   type MovementType,
@@ -15,11 +16,15 @@ import {
 import { normalizeText } from "./format";
 import { currentUserId } from "./auth/actor";
 import { PAGE_SIZE } from "./constants";
+import { EXPIRING_DAYS } from "./domains";
 import { liveItem, liveItemOf } from "./inventory/scope";
 
 /** id người dùng hiện tại (web: cookie phiên; MCP: chủ API token) — mọi truy vấn đều lọc theo đây */
 const uid = currentUserId;
 // Mọi truy vấn mặt hàng dùng liveItemOf(userId): của user đó và không nằm trong thùng rác.
+// domain: kho cần xem (web luôn truyền kho đang chọn); bỏ trống = mọi kho (agent / MCP tìm chung).
+const inDomain = (col: typeof items.domain | typeof categories.domain | typeof locations.domain, d?: Domain) =>
+  d ? [eq(col, d)] : [];
 
 /* ------------------------------------------------------------------ */
 /* Cây danh mục / vị trí                                               */
@@ -62,13 +67,13 @@ function flattenTree<T extends { id: number; parentId: number | null; name: stri
   return out;
 }
 
-export async function getCategoryTree() {
+export async function getCategoryTree(domain?: Domain) {
   const userId = await uid();
   const [rows, counts] = await Promise.all([
     db
       .select()
       .from(categories)
-      .where(eq(categories.userId, userId))
+      .where(and(eq(categories.userId, userId), ...inDomain(categories.domain, domain)))
       .orderBy(asc(categories.sortOrder), asc(categories.name)),
     db
       .select({ id: items.categoryId, n: count() })
@@ -79,10 +84,14 @@ export async function getCategoryTree() {
   return flattenTree<Category>(rows, new Map(counts.map((c) => [c.id ?? -1, c.n])));
 }
 
-export async function getLocationTree() {
+export async function getLocationTree(domain?: Domain) {
   const userId = await uid();
   const [rows, counts] = await Promise.all([
-    db.select().from(locations).where(eq(locations.userId, userId)).orderBy(asc(locations.name)),
+    db
+      .select()
+      .from(locations)
+      .where(and(eq(locations.userId, userId), ...inDomain(locations.domain, domain)))
+      .orderBy(asc(locations.name)),
     db
       .select({ id: items.locationId, n: count() })
       .from(items)
@@ -112,10 +121,12 @@ function descendantIds<T extends { id: number; parentId: number | null }>(rows: 
 /* Danh sách mặt hàng                                                  */
 /* ------------------------------------------------------------------ */
 
-export type StockFilter = "all" | "low" | "out" | "in";
-export type SortKey = "updated" | "name" | "qty" | "value" | "created";
+export type StockFilter = "all" | "low" | "out" | "in" | "expiring" | "expired";
+export type SortKey = "updated" | "name" | "qty" | "value" | "created" | "expiry";
 
 export type ItemFilters = {
+  /** Bỏ trống = mọi kho */
+  domain?: Domain;
   q?: string;
   categoryId?: number;
   locationId?: number;
@@ -131,6 +142,14 @@ export type ItemFilters = {
 /** "Sắp hết / cần mua": có đặt mức tối thiểu và số lượng <= mức đó (gồm cả đã hết) */
 export const lowStockCond = and(gt(items.minQuantity, 0), lte(items.quantity, items.minQuantity))!;
 export const outOfStockCond = lte(items.quantity, 0);
+/** Hôm nay theo giờ Việt Nam (hạn sử dụng là ngày, không giờ) */
+const todayVN = sql`(now() at time zone 'Asia/Ho_Chi_Minh')::date`;
+/** Số ngày còn tới hạn sử dụng (âm = đã quá hạn, null = không có hạn) — tính theo giờ VN trong SQL */
+export const expiryDays = sql<number | null>`(${items.expiresAt} - (now() at time zone 'Asia/Ho_Chi_Minh')::date)`;
+/** Đã quá hạn sử dụng */
+export const expiredCond = sql`${items.expiresAt} is not null and ${items.expiresAt} < ${todayVN}`;
+/** Hết hạn trong EXPIRING_DAYS ngày tới (chưa quá hạn) */
+export const expiringCond = sql`${items.expiresAt} is not null and ${items.expiresAt} >= ${todayVN} and ${items.expiresAt} <= ${todayVN} + ${EXPIRING_DAYS}::int`;
 
 function escapeLike(s: string) {
   return s.replace(/[\\%_]/g, (c) => `\\${c}`);
@@ -138,7 +157,7 @@ function escapeLike(s: string) {
 
 async function buildItemWhere(f: ItemFilters) {
   const userId = await uid();
-  const conds: SQL[] = [liveItemOf(userId)];
+  const conds: SQL[] = [liveItemOf(userId), ...inDomain(items.domain, f.domain)];
   if (f.ids) conds.push(inArray(items.id, f.ids.length ? f.ids : [-1]));
   if (f.q) {
     for (const word of normalizeText(f.q).split(" ").filter(Boolean)) {
@@ -163,6 +182,8 @@ async function buildItemWhere(f: ItemFilters) {
   if (f.stock === "low") conds.push(lowStockCond);
   if (f.stock === "out") conds.push(outOfStockCond);
   if (f.stock === "in") conds.push(gt(items.quantity, 0));
+  if (f.stock === "expiring") conds.push(expiringCond);
+  if (f.stock === "expired") conds.push(expiredCond);
   return and(...conds);
 }
 
@@ -176,6 +197,8 @@ function orderFor(sort: SortKey | undefined) {
       return [desc(sql`${items.quantity} * coalesce(${items.unitPrice}, 0)`), asc(items.name)];
     case "created":
       return [desc(items.createdAt)];
+    case "expiry":
+      return [sql`${items.expiresAt} asc nulls last`, asc(items.name)];
     default:
       return [desc(items.updatedAt)];
   }
@@ -193,6 +216,7 @@ export async function listItems(f: ItemFilters) {
       limit: pageSize,
       offset: (page - 1) * pageSize,
       with: { category: true, location: true, cover: true },
+      extras: { expiryDays: expiryDays.as("expiry_days") },
     }),
     db.select({ total: count() }).from(items).where(where),
   ]);
@@ -227,6 +251,7 @@ export async function getItem(id: number) {
       location: true,
       media: { orderBy: [asc(media.sortOrder), asc(media.id)] },
     },
+    extras: { expiryDays: expiryDays.as("expiry_days") },
   });
 }
 
@@ -248,10 +273,10 @@ export async function getItemMovements(itemId: number, limit = 50) {
 /* Lịch sử nhập / xuất                                                 */
 /* ------------------------------------------------------------------ */
 
-export async function listMovements(opts: { type?: MovementType; q?: string; page?: number }) {
+export async function listMovements(opts: { domain?: Domain; type?: MovementType; q?: string; page?: number }) {
   const pageSize = 50;
   const page = Math.max(1, opts.page ?? 1);
-  const conds: SQL[] = [liveItemOf(await uid())];
+  const conds: SQL[] = [liveItemOf(await uid()), ...inDomain(items.domain, opts.domain)];
   if (opts.type) conds.push(eq(stockMovements.type, opts.type));
   if (opts.q) {
     for (const word of normalizeText(opts.q).split(" ").filter(Boolean)) {
@@ -288,16 +313,18 @@ export async function listMovements(opts: { type?: MovementType; q?: string; pag
 /* Dashboard                                                           */
 /* ------------------------------------------------------------------ */
 
-export async function getDashboard() {
+export async function getDashboard(domain: Domain) {
   const userId = await uid();
-  const mine = liveItemOf(userId);
-  const [[totals], byKind, byCategory, lowStock, recent] = await Promise.all([
+  const mine = and(liveItemOf(userId), eq(items.domain, domain))!;
+  const [[totals], byKind, byCategory, lowStock, recent, expiring] = await Promise.all([
     db
       .select({
         items: count(),
         value: sql<number>`coalesce(sum(${items.quantity} * coalesce(${items.unitPrice}, 0)), 0)::float8`,
         low: sql<number>`count(*) filter (where ${lowStockCond})::int`,
         out: sql<number>`count(*) filter (where ${outOfStockCond})::int`,
+        expiring: sql<number>`count(*) filter (where ${expiringCond} and ${items.quantity} > 0)::int`,
+        expired: sql<number>`count(*) filter (where ${expiredCond} and ${items.quantity} > 0)::int`,
       })
       .from(items)
       .where(mine),
@@ -316,7 +343,7 @@ export async function getDashboard() {
       })
       .from(categories)
       .leftJoin(items, and(eq(items.categoryId, categories.id), liveItem))
-      .where(eq(categories.userId, userId))
+      .where(and(eq(categories.userId, userId), eq(categories.domain, domain)))
       .groupBy(categories.id, categories.name)
       .orderBy(desc(count(items.id)))
       .limit(8),
@@ -325,6 +352,7 @@ export async function getDashboard() {
       orderBy: [asc(sql`${items.quantity} / nullif(${items.minQuantity}, 0)`), asc(items.name)],
       limit: 10,
       with: { cover: true, location: true },
+      extras: { expiryDays: expiryDays.as("expiry_days") },
     }),
     db
       .select({
@@ -336,34 +364,42 @@ export async function getDashboard() {
       .where(mine)
       .orderBy(desc(stockMovements.createdAt), desc(stockMovements.id))
       .limit(10),
+    // Sắp hết hạn / đã quá hạn (kho thực phẩm), còn hàng
+    db.query.items.findMany({
+      where: and(mine, gt(items.quantity, 0), sql`${items.expiresAt} is not null and ${items.expiresAt} <= ${todayVN} + ${EXPIRING_DAYS}::int`),
+      orderBy: [asc(items.expiresAt), asc(items.name)],
+      limit: 10,
+      with: { cover: true, location: true },
+      extras: { expiryDays: expiryDays.as("expiry_days") },
+    }),
   ]);
 
-  return { totals, byKind, byCategory, lowStock, recent };
+  return { totals, byKind, byCategory, lowStock, recent, expiring };
 }
 
-export async function countLowStock() {
+export async function countLowStock(domain?: Domain) {
   const [row] = await db
     .select({ n: sql<number>`count(*)::int` })
     .from(items)
-    .where(and(liveItemOf(await uid()), lowStockCond));
+    .where(and(liveItemOf(await uid()), lowStockCond, ...inDomain(items.domain, domain)));
   return row?.n ?? 0;
 }
 
 /** Gợi ý cho ô nhập (nhà sản xuất, package, nhà cung cấp, tag) */
-export async function getSuggestions() {
+export async function getSuggestions(domain: Domain) {
   const userId = await uid();
   const distinct = (col: typeof items.manufacturer | typeof items.package | typeof items.supplier) =>
     db
       .selectDistinct({ v: sql<string>`${col}` })
       .from(items)
-      .where(and(liveItemOf(userId), sql`${col} is not null and ${col} <> ''`))
+      .where(and(liveItemOf(userId), eq(items.domain, domain), sql`${col} is not null and ${col} <> ''`))
       .orderBy(sql`1`)
       .limit(200);
   const [manufacturers, packages, suppliers, tags] = await Promise.all([
     distinct(items.manufacturer),
     distinct(items.package),
     distinct(items.supplier),
-    db.execute<{ tag: string }>(sql`select distinct unnest(${items.tags}) as tag from ${items} where ${items.userId} = ${userId} and ${items.deletedAt} is null order by 1 limit 300`),
+    db.execute<{ tag: string }>(sql`select distinct unnest(${items.tags}) as tag from ${items} where ${items.userId} = ${userId} and ${items.domain} = ${domain} and ${items.deletedAt} is null order by 1 limit 300`),
   ]);
   return {
     manufacturers: manufacturers.map((r) => r.v!),

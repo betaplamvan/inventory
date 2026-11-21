@@ -4,11 +4,13 @@ import { Download, FileUp, MapPin, PackageSearch, Plus, QrCode } from "lucide-re
 import { getCategoryTree, getLocationTree, listItems, type SortKey, type StockFilter } from "@/lib/queries";
 import { fmtMoney } from "@/lib/format";
 import type { ItemKind } from "@/db/schema";
-import { ITEM_KINDS } from "@/lib/constants";
+import { currentDomain } from "@/lib/domain-server";
+import { DOMAIN_CONFIG } from "@/lib/domains";
 import { ItemsFilters, ViewToggle, type FilterValues } from "@/components/items-filters";
 import { QuickAdjust } from "@/components/quick-adjust";
 import {
   EmptyState,
+  ExpiryBadge,
   ItemThumb,
   KindBadge,
   ListSkeleton,
@@ -26,7 +28,7 @@ export default function ItemsPage(props: PageProps<"/items">) {
     <>
       <PageHeader
         title="Kho hàng"
-        description="Linh kiện, module, dụng cụ và vật tư đang có"
+        description="Mọi thứ đang có trong kho đang chọn"
         tour="items"
         actions={
           <Link href="/items/new" className="btn-primary max-lg:hidden">
@@ -63,9 +65,12 @@ async function ItemsContent({ searchParams }: { searchParams: PageProps<"/items"
   };
   const page = Number(one(sp.page)) || 1;
 
-  const kind = ITEM_KINDS.includes(values.kind as ItemKind) ? (values.kind as ItemKind) : undefined;
+  const domain = await currentDomain();
+  const cfg = DOMAIN_CONFIG[domain];
+  const kind = cfg.kinds.includes(values.kind as ItemKind) ? (values.kind as ItemKind) : undefined;
   const [result, categories, locations] = await Promise.all([
     listItems({
+      domain,
       q: values.q,
       kind,
       categoryId: Number(values.category) || undefined,
@@ -74,8 +79,8 @@ async function ItemsContent({ searchParams }: { searchParams: PageProps<"/items"
       sort: values.sort as SortKey,
       page,
     }),
-    getCategoryTree(),
-    getLocationTree(),
+    getCategoryTree(domain),
+    getLocationTree(domain),
   ]);
 
   const { rows, total, pageCount } = result;
@@ -83,10 +88,18 @@ async function ItemsContent({ searchParams }: { searchParams: PageProps<"/items"
 
   return (
     <>
-      <ItemsFilters values={values} categories={categories} locations={locations} />
+      <ItemsFilters
+        values={values}
+        categories={categories}
+        locations={locations}
+        kinds={cfg.kinds}
+        withExpiry={cfg.showExpiry}
+      />
 
       <div className="mb-3 flex items-center gap-2 text-sm text-muted">
-        <span className="mr-auto">{total} mặt hàng</span>
+        <span className="mr-auto">
+          {total} {cfg.noun}
+        </span>
         <span className="flex items-center gap-2" data-tour="items-tools">
         <Link href="/import" className="btn-ghost btn-sm" title="Nhập từ CSV / Excel">
           <FileUp className="size-3.5" /> <span className="max-sm:hidden">Nhập</span>
@@ -104,10 +117,10 @@ async function ItemsContent({ searchParams }: { searchParams: PageProps<"/items"
       </div>
 
       {rows.length === 0 ? (
-        <EmptyState icon={<PackageSearch className="size-10" />} title="Không tìm thấy mặt hàng nào">
+        <EmptyState icon={<PackageSearch className="size-10" />} title={`Không tìm thấy ${cfg.noun} nào`}>
           Thử đổi từ khoá / bộ lọc, hoặc{" "}
           <Link href="/items/new" className="text-accent-strong hover:underline">
-            thêm mặt hàng mới
+            thêm {cfg.noun} mới
           </Link>
           .
         </EmptyState>
@@ -122,6 +135,7 @@ async function ItemsContent({ searchParams }: { searchParams: PageProps<"/items"
                   <div className="flex flex-wrap items-center gap-1">
                     <KindBadge kind={it.kind} />
                     <StockStateBadge quantity={it.quantity} minQuantity={it.minQuantity} />
+                    {it.quantity > 0 && <ExpiryBadge date={it.expiresAt} days={it.expiryDays} />}
                   </div>
                   <p className="truncate text-xs text-muted">{it.location?.name ?? "Chưa có vị trí"}</p>
                 </div>
@@ -148,6 +162,7 @@ async function ItemsContent({ searchParams }: { searchParams: PageProps<"/items"
                   <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
                     <KindBadge kind={it.kind} />
                     <StockStateBadge quantity={it.quantity} minQuantity={it.minQuantity} />
+                    {it.quantity > 0 && <ExpiryBadge date={it.expiresAt} days={it.expiryDays} />}
                     {it.sku && <span className="font-mono">{it.sku}</span>}
                     {it.package && <span>{it.package}</span>}
                     {it.category && <span>{it.category.name}</span>}

@@ -1,8 +1,8 @@
 <img src="public/icons/icon-192.png" alt="" width="72" height="72">
 
-# Kho linh kiện
+# Kho đồ
 
-App tự quản lý linh kiện, module, dụng cụ và vật tư điện tử. Đăng nhập bằng Google, mỗi tài khoản có một kho riêng.
+App quản lý đồ cá nhân với **3 kho trong một app**: linh kiện điện tử, tủ quần áo và tủ bếp. Mỗi kho có loại, danh mục, vị trí, màu giao diện và trợ lý riêng — brainstorm mạch DIY từ linh kiện sẵn có, phối đồ từ tủ quần áo, gợi ý món ăn từ nguyên liệu trong bếp, và tự thêm món còn thiếu vào danh sách cần mua. Đăng nhập bằng Google, mỗi tài khoản có kho riêng.
 
 - **Dùng ngay, không cần tự cài:** https://inventory.nguyenducquan.io.vn
 - **Mã nguồn:** https://github.com/betaplamvan/inventory (tự deploy: xem [Chạy production bằng Docker](#chạy-production-bằng-docker))
@@ -10,6 +10,14 @@ App tự quản lý linh kiện, module, dụng cụ và vật tư điện tử.
 **Stack:** Next.js 16 (App Router, Server Actions) · PostgreSQL 17 + Drizzle ORM · MinIO (ảnh / video / datasheet) · Tailwind CSS 4
 
 ## Tính năng
+
+- **3 kho, chuyển bằng một chạm** (nút ở menu / thanh trên cùng):
+  - **Kho linh kiện** — linh kiện, module, dụng cụ, vật tư; MPN, package, datasheet
+  - **Tủ quần áo** — áo, quần, váy, áo khoác, giày dép, phụ kiện; màu, size, chất liệu, mùa, phong cách
+  - **Tủ bếp** — rau củ, thịt cá trứng, đồ khô, gia vị…; **hạn sử dụng**, báo sắp hết hạn / đã hết hạn, xếp theo hạn dùng
+  - Mỗi kho có danh mục / vị trí tạo sẵn (tủ lạnh, ngăn đá, kệ đồ khô; tủ quần áo, kệ giày…) và màu giao diện riêng (mẫu A "Nhãn dán")
+- **Cần mua**: danh sách đi chợ của từng kho; gợi ý từ món dưới mức tối thiểu; đánh dấu đã mua → nhập kho luôn (món có sẵn) hoặc mở form thêm mới điền sẵn; chép danh sách để gửi qua tin nhắn
+- **Trợ lý brainstorm** theo kho (LLM tự host + MCP): mạch DIY làm được với linh kiện đang có, phối đồ theo dịp / thời tiết, món ăn từ nguyên liệu (ưu tiên đồ sắp hết hạn) — chỉ rõ món nào đã có, món thiếu thì thêm vào danh sách cần mua
 
 - **Kho hàng**: tìm kiếm tiếng Việt có dấu hoặc không dấu ("tu gom" ra "Tụ gốm"), lọc theo loại / danh mục / vị trí / tình trạng, xem dạng danh sách hoặc lưới, nút **+ / −** chỉnh nhanh số lượng
 - **Mặt hàng**: tên, SKU riêng, hãng, MPN, package, bảng thông số tuỳ ý (có gợi ý theo loại), tag, đơn vị (cái/mét/cuộn…, cho phép số lẻ như 0,5 cuộn thiếc), mức tối thiểu, đơn giá, nhà cung cấp, link mua, link datasheet
@@ -133,7 +141,9 @@ Chi tiết kỹ thuật: theo đặc tả MCP Authorization — metadata ở `/.
 
 | Tool | Việc |
 |---|---|
-| `inventory_overview` | Tổng quan: số mặt hàng, giá trị kho, cần mua thêm, giao dịch gần đây |
+| `inventory_overview` | Tổng quan một kho hoặc cả 3 kho: số mặt hàng, giá trị, cần mua thêm, sắp hết hạn, giao dịch gần đây |
+| `inventory_snapshot` | Danh sách gọn mọi thứ đang có trong một kho (1 dòng / món: số lượng, đặc điểm, hạn dùng, vị trí) — để brainstorm mạch / phối đồ / món ăn |
+| `list_shopping_list`, `add_shopping_items`, `update_shopping_item` | Danh sách cần mua của từng kho: xem, thêm nhiều món, đánh dấu đã mua (nhập kho luôn), sửa / xoá |
 | `search_items` | Tìm / lọc mặt hàng (không phân biệt dấu), theo danh mục, vị trí, loại, tình trạng |
 | `get_item` | Chi tiết mặt hàng, thông số, link, ảnh/tài liệu, lịch sử |
 | `get_item_images` | Trả ảnh (thumbnail) để agent xem trực tiếp, kèm URL xem có thời hạn của từng ảnh để hiển thị ngay trong câu trả lời chat (xem dưới) |
@@ -144,6 +154,8 @@ Chi tiết kỹ thuật: theo đặc tả MCP Authorization — metadata ở `/.
 | `delete_item`, `list_trash`, `restore_item` | Chuyển vào thùng rác / xem / khôi phục |
 | `create_category`, `create_location` | Tạo danh mục / vị trí |
 | `create_upload_url` | Xin link upload ngắn hạn cho 1 mặt hàng; agent `curl` file thẳng lên (xem dưới) |
+
+Mọi tool có tham số `domain`: `electronics` (linh kiện), `wardrobe` (quần áo), `pantry` (thực phẩm). Tool đọc không truyền `domain` thì xem cả 3 kho; tool ghi không truyền thì mặc định `electronics` (tương thích agent cũ). Thực phẩm có thêm `expiresAt` (YYYY-MM-DD) và lọc `stock: "expiring" | "expired"`.
 
 Agent chỉ xoá được vào thùng rác; **xoá hẳn** chỉ làm được trên giao diện web. Token *chỉ đọc* bị chặn mọi tool ghi. Mọi thay đổi số lượng do agent thực hiện đều ghi kèm tên token / kết nối trong lịch sử.
 
@@ -180,6 +192,8 @@ https://kho.example.com/api/media/42?thumb=1&t=ml_…
 Trang **Trợ lý** (`/chat`) và nút nổi ở góc màn hình mở khung chat với một LLM bạn tự host. Trợ lý dùng **đúng bộ tool MCP** ở trên (chạy ngay trong app, không qua mạng), nên làm được mọi việc như Claude qua MCP: tìm, xem, thống kê, thêm / sửa, nhập / xuất / kiểm kê, nhập nhiều dòng, chuyển vào thùng rác và khôi phục.
 
 - Tool **đọc** chạy ngay. Tool **ghi** hiện thẻ *Xác nhận / Bỏ qua* (kèm tên mặt hàng và tham số); chỉ chạy khi bấm Xác nhận. Lịch sử nhập / xuất ghi nguồn `agent: Trợ lý chat`.
+- Mỗi cuộc trò chuyện thuộc kho đang chọn lúc bắt đầu: trợ lý nhận vai trò riêng (bạn đồng hành DIY / stylist / đầu bếp gia đình), tool mặc định làm việc với kho đó, câu gợi ý theo kho. Trang Trợ lý chỉ liệt kê cuộc trò chuyện của kho đang chọn.
+- Nhiều thao tác chờ xác nhận cùng lúc → nút **Xác nhận tất cả / Bỏ qua tất cả**.
 - Lịch sử chat lưu trong DB theo tài khoản (bảng `chat_conversations`, `chat_messages`).
 - Câu trả lời **chạy nền trên server**, không phụ thuộc kết nối trình duyệt: chuyển trang, đóng khung chat, khoá màn hình điện thoại hay mở trên thiết bị khác đều xem tiếp được (client tự nối lại qua `GET /api/chat/conversations/[id]/stream`). Chỉ dừng khi bấm nút Dừng (`POST /api/chat/stop`) hoặc sau 10 phút.
 - Cần server có API kiểu OpenAI hỗ trợ **gọi tool** (function calling), ví dụ `llama-server --jinja` với Qwen 2.5 / Qwen 3. Khối `<think>` của model suy luận được ẩn đi.
@@ -249,6 +263,9 @@ src/
   app/api/auth/       /google (bắt đầu), /google/callback, /dev-login
   app/api/mcp/        MCP server (Streamable HTTP, Bearer token)
   lib/mcp/server.ts   định nghĩa các tool MCP
+  lib/domains.ts      cấu hình 3 kho (tên, loại, đơn vị, thông số gợi ý, danh mục mẫu, vai trò trợ lý)
+  lib/inventory/shopping.ts  danh sách cần mua
+  components/domain.tsx      nút chuyển kho, đồng bộ cookie inv_domain + màu giao diện (html[data-domain])
   lib/chat/           trợ lý chat: client LLM (API kiểu OpenAI), vòng lặp gọi tool, lưu hội thoại
   app/api/chat/       stream câu trả lời (SSE), danh sách / xoá cuộc trò chuyện
   components/chat/    khung chat, trang /chat, nút nổi

@@ -8,6 +8,7 @@ import { EmptyState, PageHeader, Skeleton, qs } from "@/components/ui";
 import { ITEM_KINDS } from "@/lib/constants";
 import { MAX_LABELS, itemLabelUrl, locationLabelUrl } from "@/lib/labels";
 import { getLocationTree, listAllItems, type StockFilter } from "@/lib/queries";
+import { currentDomain } from "@/lib/domain-server";
 
 export const metadata = { title: "In nhãn QR" };
 
@@ -39,6 +40,7 @@ export default function LabelsPage(props: PageProps<"/labels">) {
 
 async function Labels({ searchParams }: { searchParams: PageProps<"/labels">["searchParams"] }) {
   const sp = await searchParams;
+  const domain = await currentDomain();
   const size: SizeKey = (one(sp.size) as SizeKey) in SIZES ? (one(sp.size) as SizeKey) : "m";
   const S = SIZES[size];
   const locParam = one(sp.locations);
@@ -46,7 +48,7 @@ async function Labels({ searchParams }: { searchParams: PageProps<"/labels">["se
   let labels: Label[];
   let back: { href: string; label: string };
   if (locParam) {
-    const tree = await getLocationTree();
+    const tree = await getLocationTree(domain);
     const ids = locParam === "all" ? null : new Set(idList(locParam));
     labels = tree
       .filter((l) => !ids || ids.has(l.id))
@@ -63,6 +65,8 @@ async function Labels({ searchParams }: { searchParams: PageProps<"/labels">["se
     const ids = one(sp.items);
     const rows = await listAllItems(
       {
+        // In theo id đã chọn: đúng những món đó; còn lại: theo bộ lọc của kho đang chọn
+        domain: ids ? undefined : domain,
         ids: ids ? idList(ids) : undefined,
         q: one(sp.q),
         kind: ITEM_KINDS.includes(kind as ItemKind) ? (kind as ItemKind) : undefined,

@@ -5,11 +5,21 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
-import { categories, items } from "@/db/schema";
+import { categories, items, type Domain, type ItemKind } from "@/db/schema";
 import { runAsUser } from "@/lib/auth/actor";
 import { appBaseUrl } from "@/lib/auth/constants";
 import type { TokenScope } from "@/lib/auth/api-tokens";
 import { ITEM_KINDS, KIND_LABELS, MOVEMENT_LABELS } from "@/lib/constants";
+import { DOMAINS, DOMAIN_CONFIG, EXPIRING_DAYS } from "@/lib/domains";
+import { fmtDate, fmtQty } from "@/lib/format";
+import {
+  MAX_SHOPPING_BATCH,
+  addShoppingFor,
+  listShoppingFor,
+  removeShoppingFor,
+  setShoppingDoneFor,
+  updateShoppingFor,
+} from "@/lib/inventory/shopping";
 import { itemSchema, type ItemInput } from "@/lib/item-input";
 import { importRows, type ImportRow } from "@/lib/inventory/import";
 import {
@@ -39,7 +49,14 @@ import { UPLOAD_LINK_MAX_FILES, UPLOAD_LINK_MAX_MINUTES, createUploadLink } from
 import { MEDIA_LINK_DAYS, createMediaLink } from "@/lib/inventory/media-links";
 import { getObject } from "@/lib/storage";
 
-export type McpAuth = { userId: string; scope: TokenScope; tokenId?: string; tokenName?: string };
+export type McpAuth = {
+  userId: string;
+  scope: TokenScope;
+  tokenId?: string;
+  tokenName?: string;
+  /** Kho mặc định khi tool không truyền domain (trợ lý chat: kho của cuộc trò chuyện). Không có = tìm mọi kho. */
+  defaultDomain?: Domain;
+};
 
 /** import_items: số dòng tối đa mỗi lần gọi */
 const MAX_IMPORT_TOOL_ROWS = 100;
@@ -66,9 +83,18 @@ const refSchema = z
 /* Schema trường mặt hàng                                              */
 /* ------------------------------------------------------------------ */
 
+const domainSchema = z
+  .enum(DOMAINS as [Domain, ...Domain[]])
+  .describe("Kho: electronics = linh kiện điện tử, wardrobe = tủ quần áo, pantry = tủ bếp / thực phẩm");
+
 const kindSchema = z
   .enum(ITEM_KINDS as [string, ...string[]])
-  .describe(`Loại: ${ITEM_KINDS.map((k) => `${k} = ${KIND_LABELS[k]}`).join(", ")}`);
+  .describe(
+    "Loại (mỗi kho một nhóm): " +
+      DOMAINS.map(
+        (d) => `${d}: ${DOMAIN_CONFIG[d].kinds.map((k) => `${k} = ${KIND_LABELS[k]}`).join(", ")}`,
+      ).join(" | "),
+  );
 
 const itemFields = {
   sku: z.string().max(100).nullish().describe("Mã riêng do người dùng đặt (không trùng trong kho)"),
@@ -76,22 +102,27 @@ const itemFields = {
   category: refSchema.nullish().describe("Danh mục: id hoặc tên / đường dẫn"),
   location: refSchema.nullish().describe("Vị trí cất: id hoặc tên / đường dẫn, ví dụ \"Tủ A > Ngăn 3\""),
   createMissing: z.boolean().optional().describe("true → tự tạo danh mục / vị trí nếu chưa có"),
-  manufacturer: z.string().max(200).nullish().describe("Hãng sản xuất"),
+  manufacturer: z.string().max(200).nullish().describe("Hãng sản xuất / thương hiệu"),
   mpn: z.string().max(200).nullish().describe("Mã nhà sản xuất (MPN)"),
   package: z.string().max(100).nullish().describe("Package / kiểu chân, ví dụ DIP-8, SOT-23, 0805"),
   description: z.string().max(10000).nullish(),
   specs: z
     .array(z.object({ key: z.string(), value: z.string() }))
     .optional()
-    .describe('Thông số, ví dụ [{"key":"Điện áp","value":"5V"}]'),
+    .describe('Thông số / đặc điểm, ví dụ [{"key":"Điện áp","value":"5V"}] hoặc [{"key":"Màu","value":"trắng"},{"key":"Size","value":"M"}]'),
   tags: z.array(z.string()).optional(),
-  unit: z.string().max(30).optional().describe('Đơn vị: "cái", "con", "mét", "cuộn"…'),
+  unit: z.string().max(30).optional().describe('Đơn vị: "cái", "con", "chiếc", "đôi", "g", "kg", "quả"…'),
   minQuantity: z.number().min(0).optional().describe("Mức tối thiểu; thấp hơn sẽ báo cần mua thêm (0 = không theo dõi)"),
   unitPrice: z.number().min(0).nullish().describe("Đơn giá (VNĐ)"),
   supplier: z.string().max(200).nullish().describe("Nhà cung cấp, ví dụ Ban Linh Kiện, Hshop, LCSC"),
   purchaseUrl: z.string().url().nullish().describe("Link mua hàng"),
   datasheetUrl: z.string().url().nullish().describe("Link datasheet"),
   notes: z.string().max(10000).nullish(),
+  expiresAt: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .nullish()
+    .describe("Hạn sử dụng YYYY-MM-DD (kho thực phẩm)"),
 };
 
 /** Trường của 1 dòng trong import_items: như itemFields, trừ createMissing (là tuỳ chọn chung của cả lần nhập) */
@@ -99,6 +130,9 @@ const { createMissing: _createMissing, ...importFields } = itemFields;
 
 function summarizeItem(it: {
   id: number;
+  domain: Domain;
+  expiresAt?: string | null;
+  expiryDays?: number | null;
   name: string;
   sku: string | null;
   kind: string;
@@ -112,9 +146,11 @@ function summarizeItem(it: {
 }) {
   return {
     id: it.id,
+    domain: it.domain,
     name: it.name,
     sku: it.sku,
     kind: it.kind,
+    ...(it.expiresAt ? { expiresAt: it.expiresAt, expiresInDays: it.expiryDays ?? undefined } : {}),
     quantity: it.quantity,
     unit: it.unit,
     minQuantity: it.minQuantity,
@@ -160,10 +196,14 @@ function validateItem(data: unknown): ItemInput {
 
 export function buildMcpServer(auth: McpAuth) {
   const server = new McpServer(
-    { name: "kho-linh-kien", version: "1.0.0" },
+    { name: "kho-linh-kien", version: "2.0.0" },
     {
       instructions:
-        "Kho linh kiện điện tử cá nhân của người dùng (linh kiện, module, dụng cụ, vật tư). " +
+        "Kho đồ cá nhân của người dùng, gồm 3 kho (tham số domain): electronics = linh kiện điện tử, " +
+        "wardrobe = tủ quần áo, pantry = tủ bếp / thực phẩm (có hạn sử dụng). Mặt hàng, danh mục, vị trí thuộc đúng 1 kho; " +
+        "tool đọc không truyền domain thì xem mọi kho, tool ghi không truyền domain thì mặc định electronics. " +
+        "Brainstorm (mạch DIY, phối đồ, món ăn từ đồ đang có): gọi inventory_snapshot của kho đó để xem gọn mọi thứ đang có; " +
+        "thứ còn thiếu thì thêm vào danh sách cần mua bằng add_shopping_items. " +
         "Tìm trước bằng search_items để tránh tạo trùng. Thay đổi số lượng bằng record_movement " +
         "(in = nhập thêm, out = lấy ra dùng, adjust = đặt số lượng thực tế khi kiểm kê) để có lịch sử. " +
         "Tiền tệ là VNĐ. Danh mục / vị trí có thể truyền bằng tên, ví dụ \"Tụ điện > Tụ gốm\". " +
@@ -196,6 +236,11 @@ export function buildMcpServer(auth: McpAuth) {
       }
     };
 
+  /** Kho để đọc: truyền vào > mặc định của phiên > undefined (= mọi kho) */
+  const readDomain = (d?: Domain) => d ?? auth.defaultDomain;
+  /** Kho để ghi: truyền vào > mặc định của phiên > điện tử (tương thích agent cũ) */
+  const writeDomain = (d?: Domain) => d ?? auth.defaultDomain ?? "electronics";
+
   const readOnly = { readOnlyHint: true, openWorldHint: false } as const;
   const writeHint = { readOnlyHint: false, destructiveHint: false, openWorldHint: false } as const;
 
@@ -205,13 +250,38 @@ export function buildMcpServer(auth: McpAuth) {
     "inventory_overview",
     {
       title: "Tổng quan kho",
-      description: "Số mặt hàng, giá trị kho ước tính, số mặt hàng sắp hết / hết, danh sách cần mua thêm, giao dịch gần đây.",
+      description:
+        "Số mặt hàng, giá trị ước tính, số món sắp hết / hết, sắp hết hạn (thực phẩm), danh sách cần mua thêm, giao dịch gần đây. " +
+        "Không truyền domain = tổng quan cả 3 kho.",
+      inputSchema: { domain: domainSchema.optional() },
       annotations: readOnly,
     },
-    run(false, async () => {
-      const d = await getDashboard();
-      return json({
+    run(false, async (a: { domain?: Domain }) => {
+      const one = readDomain(a.domain);
+      if (!one) {
+        const all = await Promise.all(DOMAINS.map(async (d) => [d, await overview(d)] as const));
+        return json(Object.fromEntries(all));
+      }
+      return json(await overview(one));
+    }),
+  );
+
+  async function overview(domain: Domain) {
+      const d = await getDashboard(domain);
+      return {
+        domain,
+        space: DOMAIN_CONFIG[domain].space,
         totals: d.totals,
+        expiringSoon: DOMAIN_CONFIG[domain].showExpiry
+          ? d.expiring.map((it) => ({
+              id: it.id,
+              name: it.name,
+              quantity: it.quantity,
+              unit: it.unit,
+              expiresAt: it.expiresAt,
+              expiresInDays: it.expiryDays,
+            }))
+          : undefined,
         byKind: d.byKind.map((k) => ({ kind: k.kind, label: KIND_LABELS[k.kind], count: k.n })),
         needToBuy: d.lowStock.map((it) => ({
           id: it.id,
@@ -230,29 +300,34 @@ export function buildMcpServer(auth: McpAuth) {
           reference: m.reference,
           at: m.createdAt,
         })),
-      });
-    }),
-  );
+      };
+  }
 
   server.registerTool(
     "search_items",
     {
       title: "Tìm mặt hàng",
       description:
-        "Tìm / lọc mặt hàng. query tìm theo tên, SKU, MPN, package, tag, thông số (không phân biệt dấu tiếng Việt).",
+        "Tìm / lọc mặt hàng. query tìm theo tên, SKU, MPN, package, tag, thông số (không phân biệt dấu tiếng Việt). " +
+        "Không truyền domain = tìm cả 3 kho (lọc theo danh mục / vị trí thì cần domain).",
       inputSchema: {
+        domain: domainSchema.optional(),
         query: z.string().optional(),
         category: refSchema.optional().describe("Lọc theo danh mục (gồm cả danh mục con)"),
         location: refSchema.optional().describe("Lọc theo vị trí (gồm cả vị trí con)"),
         kind: kindSchema.optional(),
-        stock: z.enum(["all", "in", "low", "out"]).optional().describe("in = còn hàng, low = cần mua thêm, out = hết"),
-        sort: z.enum(["updated", "created", "name", "qty", "value"]).optional(),
+        stock: z
+          .enum(["all", "in", "low", "out", "expiring", "expired"])
+          .optional()
+          .describe(`in = còn hàng, low = cần mua thêm, out = hết, expiring = hết hạn trong ${EXPIRING_DAYS} ngày, expired = đã quá hạn`),
+        sort: z.enum(["updated", "created", "name", "qty", "value", "expiry"]).optional(),
         limit: z.number().int().min(1).max(100).optional().describe("Mặc định 20"),
         page: z.number().int().min(1).optional(),
       },
       annotations: readOnly,
     },
     run(false, async (a: {
+      domain?: Domain;
       query?: string;
       category?: number | string;
       location?: number | string;
@@ -262,10 +337,15 @@ export function buildMcpServer(auth: McpAuth) {
       limit?: number;
       page?: number;
     }) => {
+      const domain = readDomain(a.domain);
+      if ((a.category != null || a.location != null) && !domain) {
+        return fail("Lọc theo danh mục / vị trí cần truyền domain (danh mục mỗi kho khác nhau)");
+      }
       const res = await listItems({
+        domain,
         q: a.query,
-        categoryId: (await resolveRef("category", a.category, auth.userId, false)) ?? undefined,
-        locationId: (await resolveRef("location", a.location, auth.userId, false)) ?? undefined,
+        categoryId: domain ? ((await resolveRef("category", a.category, auth.userId, false, domain)) ?? undefined) : undefined,
+        locationId: domain ? ((await resolveRef("location", a.location, auth.userId, false, domain)) ?? undefined) : undefined,
         kind: a.kind as never,
         stock: a.stock,
         sort: a.sort,
@@ -295,13 +375,9 @@ export function buildMcpServer(auth: McpAuth) {
     },
     run(false, async (a: { id?: number; sku?: string; movementLimit?: number }) => {
       const id = await findItemId(auth.userId, a);
-      const [it, movements, catTree, locTree] = await Promise.all([
-        getItem(id),
-        getItemMovements(id, a.movementLimit ?? 20),
-        getCategoryTree(),
-        getLocationTree(),
-      ]);
+      const [it, movements] = await Promise.all([getItem(id), getItemMovements(id, a.movementLimit ?? 20)]);
       if (!it) return fail(`Không có mặt hàng id=${id}`);
+      const [catTree, locTree] = await Promise.all([getCategoryTree(it.domain), getLocationTree(it.domain)]);
       return json({
         ...summarizeItem(it),
         category: catTree.find((c) => c.id === it.categoryId)?.path ?? null,
@@ -413,11 +489,13 @@ export function buildMcpServer(auth: McpAuth) {
   );
 
   const treeTool = (kind: "category" | "location") =>
-    run(false, async () => {
-      const tree = kind === "category" ? await getCategoryTree() : await getLocationTree();
+    run(false, async (a: { domain?: Domain }) => {
+      const domain = readDomain(a.domain);
+      const tree = kind === "category" ? await getCategoryTree(domain) : await getLocationTree(domain);
       return json(
         tree.map((n) => ({
           id: n.id,
+          domain: n.domain,
           name: n.name,
           path: n.path,
           parentId: n.parentId,
@@ -429,13 +507,23 @@ export function buildMcpServer(auth: McpAuth) {
 
   server.registerTool(
     "list_categories",
-    { title: "Danh sách danh mục", description: "Cây danh mục (kèm đường dẫn và số mặt hàng, gồm cả mục con).", annotations: readOnly },
+    {
+      title: "Danh sách danh mục",
+      description: "Cây danh mục (kèm đường dẫn và số mặt hàng, gồm cả mục con). Không truyền domain = mọi kho.",
+      inputSchema: { domain: domainSchema.optional() },
+      annotations: readOnly,
+    },
     treeTool("category"),
   );
 
   server.registerTool(
     "list_locations",
-    { title: "Danh sách vị trí cất", description: "Cây vị trí cất đồ (tủ, ngăn, hộp…) kèm số mặt hàng.", annotations: readOnly },
+    {
+      title: "Danh sách vị trí cất",
+      description: "Cây vị trí cất đồ (tủ, ngăn, hộp, tủ lạnh…) kèm số mặt hàng. Không truyền domain = mọi kho.",
+      inputSchema: { domain: domainSchema.optional() },
+      annotations: readOnly,
+    },
     treeTool("location"),
   );
 
@@ -447,6 +535,7 @@ export function buildMcpServer(auth: McpAuth) {
         "Lịch sử thay đổi số lượng, mới nhất trước. Lọc theo mặt hàng, loại, hoặc từ khoá (tên hàng, dự án, ghi chú). " +
         "source cho biết thao tác đến từ đâu: web, agent: <tên token>, import (CSV).",
       inputSchema: {
+        domain: domainSchema.optional(),
         itemId: z.number().int().positive().optional(),
         type: z.enum(["in", "out", "adjust"]).optional(),
         query: z.string().optional(),
@@ -454,13 +543,13 @@ export function buildMcpServer(auth: McpAuth) {
       },
       annotations: readOnly,
     },
-    run(false, async (a: { itemId?: number; type?: "in" | "out" | "adjust"; query?: string; limit?: number }) => {
+    run(false, async (a: { domain?: Domain; itemId?: number; type?: "in" | "out" | "adjust"; query?: string; limit?: number }) => {
       const limit = a.limit ?? 20;
       if (a.itemId) {
         const rows = await getItemMovements(a.itemId, limit);
         return json(rows.map((m) => ({ itemId: a.itemId, type: m.type, delta: m.delta, balanceAfter: m.balanceAfter, reference: m.reference, note: m.note, source: sourceOf(m), at: m.createdAt })));
       }
-      const res = await listMovements({ type: a.type, q: a.query });
+      const res = await listMovements({ domain: readDomain(a.domain), type: a.type, q: a.query });
       return json(
         res.rows.slice(0, limit).map(({ movement: m, item }) => ({
           itemId: item.id,
@@ -485,21 +574,25 @@ export function buildMcpServer(auth: McpAuth) {
     {
       title: "Thêm mặt hàng",
       description:
-        "Thêm mặt hàng mới. Nên search_items trước để tránh trùng. quantity ban đầu được ghi là một lần nhập kho.",
+        "Thêm mặt hàng mới vào một kho. Nên search_items trước để tránh trùng. quantity ban đầu được ghi là một lần nhập kho.",
       inputSchema: {
+        domain: domainSchema.optional().describe("Kho của mặt hàng (mặc định electronics)"),
         name: z.string().min(1).max(300),
         quantity: z.number().min(0).optional().describe("Số lượng hiện có, mặc định 0"),
         ...itemFields,
       },
       annotations: writeHint,
     },
-    run(true, async (a: Record<string, unknown> & { name: string; createMissing?: boolean }) => {
-      const categoryId = await resolveRef("category", a.category as never, auth.userId, !!a.createMissing);
-      const locationId = await resolveRef("location", a.location as never, auth.userId, !!a.createMissing);
+    run(true, async (a: Record<string, unknown> & { domain?: Domain; name: string; createMissing?: boolean }) => {
+      const domain = writeDomain(a.domain);
+      const cfg = DOMAIN_CONFIG[domain];
+      const categoryId = await resolveRef("category", a.category as never, auth.userId, !!a.createMissing, domain);
+      const locationId = await resolveRef("location", a.location as never, auth.userId, !!a.createMissing, domain);
       const data = validateItem({
+        domain,
         name: a.name,
         sku: a.sku ?? null,
-        kind: a.kind ?? "component",
+        kind: a.kind ?? cfg.defaultKind,
         categoryId,
         locationId,
         manufacturer: a.manufacturer ?? null,
@@ -508,7 +601,7 @@ export function buildMcpServer(auth: McpAuth) {
         description: a.description ?? null,
         specs: a.specs ?? [],
         tags: a.tags ?? [],
-        unit: a.unit ?? "cái",
+        unit: a.unit ?? cfg.defaultUnit,
         quantity: a.quantity ?? 0,
         minQuantity: a.minQuantity ?? 0,
         unitPrice: a.unitPrice ?? null,
@@ -516,6 +609,7 @@ export function buildMcpServer(auth: McpAuth) {
         purchaseUrl: a.purchaseUrl ?? null,
         datasheetUrl: a.datasheetUrl ?? null,
         notes: a.notes ?? null,
+        expiresAt: a.expiresAt ?? null,
       });
       const id = await createItemFor(auth.userId, data);
       const it = await getItem(id);
@@ -546,16 +640,17 @@ export function buildMcpServer(auth: McpAuth) {
       if (!cur) return fail(`Không có mặt hàng id=${id}`);
       const pick = <T,>(key: string, current: T) => (key in a && a[key] !== undefined ? (a[key] as T) : current);
       const data = validateItem({
+        domain: cur.domain,
         name: pick("name", cur.name),
         sku: pick("newSku", cur.sku),
         kind: pick("kind", cur.kind),
         categoryId:
           "category" in a && a.category !== undefined
-            ? await resolveRef("category", a.category as never, auth.userId, !!a.createMissing)
+            ? await resolveRef("category", a.category as never, auth.userId, !!a.createMissing, cur.domain)
             : cur.categoryId,
         locationId:
           "location" in a && a.location !== undefined
-            ? await resolveRef("location", a.location as never, auth.userId, !!a.createMissing)
+            ? await resolveRef("location", a.location as never, auth.userId, !!a.createMissing, cur.domain)
             : cur.locationId,
         manufacturer: pick("manufacturer", cur.manufacturer),
         mpn: pick("mpn", cur.mpn),
@@ -571,6 +666,7 @@ export function buildMcpServer(auth: McpAuth) {
         purchaseUrl: pick("purchaseUrl", cur.purchaseUrl),
         datasheetUrl: pick("datasheetUrl", cur.datasheetUrl),
         notes: pick("notes", cur.notes),
+        expiresAt: pick("expiresAt", cur.expiresAt),
       });
       await updateItemFor(auth.userId, id, data, "Cập nhật qua agent (MCP)");
       const it = await getItem(id);
@@ -620,11 +716,12 @@ export function buildMcpServer(auth: McpAuth) {
         "ghi thành kiểm kê); không khớp → thêm mới (cần name). Dòng lỗi không chặn các dòng khác. " +
         "Nên gọi dryRun=true trước để xem sẽ thêm / sửa gì.",
       inputSchema: {
+        domain: domainSchema.optional().describe("Kho nhận dữ liệu (mặc định electronics)"),
         items: z
           .array(
             z.object({
+              name: z.string().min(1).max(300).optional().describe("Tên mặt hàng — BẮT BUỘC với dòng thêm mới"),
               id: z.number().int().positive().optional().describe("id mặt hàng đang có (để cập nhật)"),
-              name: z.string().min(1).max(300).optional(),
               quantity: z.number().min(0).optional(),
               ...importFields,
             }),
@@ -640,11 +737,21 @@ export function buildMcpServer(auth: McpAuth) {
       },
       annotations: writeHint,
     },
-    run(true, async (a: { items: Omit<ImportRow, "line">[]; onExisting?: "update" | "skip"; createMissing?: boolean; dryRun?: boolean }) => {
+    run(true, async (a: { domain?: Domain; items: Omit<ImportRow, "line">[]; onExisting?: "update" | "skip"; createMissing?: boolean; dryRun?: boolean }) => {
+      // Dòng thêm mới thiếu tên: báo rõ từng dòng để model gửi lại đúng (thay vì lỗi chung "Vui lòng nhập tên")
+      const noName = a.items
+        .map((it, i) => (!it.name?.trim() && it.id == null && !it.sku ? i + 1 : 0))
+        .filter(Boolean);
+      if (noName.length) {
+        return fail(
+          `Dòng ${noName.join(", ")} thiếu "name" (tên mặt hàng) — bắt buộc khi thêm mới. Gửi lại import_items với name cho từng dòng.`,
+        );
+      }
       const res = await importRows(
         auth.userId,
         a.items.map((it, i) => ({ ...it, line: i + 1 })),
         {
+          domain: writeDomain(a.domain),
           onExisting: a.onExisting ?? "update",
           createMissing: !!a.createMissing,
           dryRun: !!a.dryRun,
@@ -695,14 +802,16 @@ export function buildMcpServer(auth: McpAuth) {
     "list_trash",
     {
       title: "Xem thùng rác",
-      description: "Các mặt hàng đã xoá còn khôi phục được (mới xoá trước), kèm ai xoá và khi nào.",
+      description: "Các mặt hàng đã xoá còn khôi phục được (mới xoá trước), kèm ai xoá và khi nào. Không truyền domain = mọi kho.",
+      inputSchema: { domain: domainSchema.optional() },
       annotations: readOnly,
     },
-    run(false, async () => {
-      const rows = await listTrashFor(auth.userId);
+    run(false, async (a: { domain?: Domain }) => {
+      const rows = await listTrashFor(auth.userId, readDomain(a.domain));
       return json(
         rows.map((r) => ({
           id: r.id,
+          domain: r.domain,
           name: r.name,
           sku: r.sku,
           quantity: r.quantity,
@@ -789,22 +898,26 @@ export function buildMcpServer(auth: McpAuth) {
     "create_category",
     {
       title: "Thêm danh mục",
-      description: "Tạo danh mục. parent là id hoặc tên/đường dẫn danh mục cha (bỏ trống = cấp gốc).",
+      description: "Tạo danh mục trong một kho. parent là id hoặc tên/đường dẫn danh mục cha (bỏ trống = cấp gốc).",
       inputSchema: {
+        domain: domainSchema.optional().describe("Kho (mặc định electronics)"),
         name: z.string().min(1).max(100),
         parent: refSchema.optional(),
         description: z.string().max(500).optional(),
       },
       annotations: writeHint,
     },
-    run(true, async (a: { name: string; parent?: number | string; description?: string }) => {
-      const parentId = await resolveRef("category", a.parent, auth.userId, false);
+    run(true, async (a: { domain?: Domain; name: string; parent?: number | string; description?: string }) => {
+      const domain = writeDomain(a.domain);
+      const parentId = await resolveRef("category", a.parent, auth.userId, false, domain);
       const dup = await db
         .select({ id: categories.id })
         .from(categories)
-        .where(and(eq(categories.userId, auth.userId), eq(categories.name, a.name.trim())));
-      const id = await createCategoryFor(auth.userId, { name: a.name.trim(), parentId, description: a.description });
-      const path = (await getCategoryTree()).find((n) => n.id === id)?.path;
+        .where(
+          and(eq(categories.userId, auth.userId), eq(categories.domain, domain), eq(categories.name, a.name.trim())),
+        );
+      const id = await createCategoryFor(auth.userId, { domain, name: a.name.trim(), parentId, description: a.description });
+      const path = (await getCategoryTree(domain)).find((n) => n.id === id)?.path;
       return json({ created: true, id, path, warning: dup.length ? "Đã có danh mục khác cùng tên" : undefined });
     }),
   );
@@ -813,8 +926,9 @@ export function buildMcpServer(auth: McpAuth) {
     "create_location",
     {
       title: "Thêm vị trí cất",
-      description: "Tạo vị trí cất đồ (tủ, ngăn, hộp…). parent là id hoặc tên/đường dẫn vị trí cha.",
+      description: "Tạo vị trí cất đồ (tủ, ngăn, hộp, tủ lạnh…) trong một kho. parent là id hoặc tên/đường dẫn vị trí cha.",
       inputSchema: {
+        domain: domainSchema.optional().describe("Kho (mặc định electronics)"),
         name: z.string().min(1).max(100),
         code: z.string().max(50).optional().describe("Mã / nhãn dán, ví dụ A1-03"),
         parent: refSchema.optional(),
@@ -822,11 +936,176 @@ export function buildMcpServer(auth: McpAuth) {
       },
       annotations: writeHint,
     },
-    run(true, async (a: { name: string; code?: string; parent?: number | string; description?: string }) => {
-      const parentId = await resolveRef("location", a.parent, auth.userId, false);
-      const id = await createLocationFor(auth.userId, { name: a.name.trim(), code: a.code, parentId, description: a.description });
-      const path = (await getLocationTree()).find((n) => n.id === id)?.path;
+    run(true, async (a: { domain?: Domain; name: string; code?: string; parent?: number | string; description?: string }) => {
+      const domain = writeDomain(a.domain);
+      const parentId = await resolveRef("location", a.parent, auth.userId, false, domain);
+      const id = await createLocationFor(auth.userId, {
+        domain,
+        name: a.name.trim(),
+        code: a.code,
+        parentId,
+        description: a.description,
+      });
+      const path = (await getLocationTree(domain)).find((n) => n.id === id)?.path;
       return json({ created: true, id, path });
+    }),
+  );
+
+  /* ---------- Brainstorm + danh sách cần mua ---------- */
+
+  server.registerTool(
+    "inventory_snapshot",
+    {
+      title: "Toàn cảnh một kho",
+      description:
+        "Danh sách gọn mọi thứ đang có trong một kho (mỗi món 1 dòng: id, tên, số lượng, loại, đặc điểm / thông số, " +
+        "hạn sử dụng, vị trí) — dùng để brainstorm: mạch DIY làm được với linh kiện sẵn có, phối đồ từ tủ quần áo, " +
+        "món ăn nấu được từ nguyên liệu trong bếp. Mặc định chỉ món còn hàng.",
+      inputSchema: {
+        domain: domainSchema,
+        includeOutOfStock: z.boolean().optional().describe("true → gồm cả món đã hết"),
+        kind: kindSchema.optional(),
+        limit: z.number().int().min(1).max(400).optional().describe("Mặc định 250"),
+      },
+      annotations: readOnly,
+    },
+    run(false, async (a: { domain?: Domain; includeOutOfStock?: boolean; kind?: string; limit?: number }) => {
+      const domain = readDomain(a.domain) ?? "electronics";
+      const res = await listItems({
+        domain,
+        stock: a.includeOutOfStock ? undefined : "in",
+        kind: a.kind as ItemKind | undefined,
+        sort: DOMAIN_CONFIG[domain].showExpiry ? "expiry" : "name",
+        pageSize: a.limit ?? 250,
+      });
+      const lines = res.rows.map((it) => {
+        const parts = [
+          `#${it.id} ${it.name}`,
+          `${fmtQty(it.quantity)} ${it.unit}`,
+          KIND_LABELS[it.kind],
+          it.package,
+          it.manufacturer,
+          it.specs.length ? it.specs.map((s) => (s.value ? `${s.key}: ${s.value}` : s.key)).join("; ") : null,
+          it.tags.length ? `tag: ${it.tags.join(", ")}` : null,
+          it.expiresAt
+            ? `HSD ${fmtDate(it.expiresAt)}${it.expiryDays != null ? (it.expiryDays < 0 ? " (ĐÃ QUÁ HẠN)" : ` (còn ${it.expiryDays} ngày)`) : ""}`
+            : null,
+          it.location?.name ? `ở ${it.location.name}` : null,
+        ].filter(Boolean);
+        return parts.join(" · ");
+      });
+      const more = res.total > res.rows.length ? `\n…còn ${res.total - res.rows.length} món nữa (tăng limit hoặc lọc kind)` : "";
+      const head = `${DOMAIN_CONFIG[domain].space}: ${res.total} ${DOMAIN_CONFIG[domain].noun}${a.includeOutOfStock ? "" : " còn hàng"}. Link: ${appBaseUrl()}/items/<id>`;
+      return { content: [{ type: "text", text: `${head}\n${lines.join("\n")}${more}` }] };
+    }),
+  );
+
+  server.registerTool(
+    "list_shopping_list",
+    {
+      title: "Danh sách cần mua",
+      description:
+        "Các món cần mua (người dùng hoặc trợ lý đã thêm) của một kho, kèm các món dưới mức tối thiểu (lowStock). " +
+        "Không truyền domain = mọi kho.",
+      inputSchema: {
+        domain: domainSchema.optional(),
+        includeDone: z.boolean().optional().describe("true → gồm cả món đã mua"),
+      },
+      annotations: readOnly,
+    },
+    run(false, async (a: { domain?: Domain; includeDone?: boolean }) => {
+      const domain = readDomain(a.domain);
+      const [list, low] = await Promise.all([
+        listShoppingFor(auth.userId, domain, { includeDone: a.includeDone }),
+        listItems({ domain, stock: "low", pageSize: 50, sort: "qty" }),
+      ]);
+      return json({
+        shoppingList: list.map((s) => ({
+          id: s.id,
+          domain: s.domain,
+          name: s.name,
+          quantity: s.quantity,
+          unit: s.unit,
+          note: s.note,
+          itemId: s.itemId,
+          done: s.done,
+          addedBy: s.addedBy,
+        })),
+        lowStock: low.rows.map((it) => ({
+          id: it.id,
+          domain: it.domain,
+          name: it.name,
+          quantity: it.quantity,
+          minQuantity: it.minQuantity,
+          unit: it.unit,
+        })),
+        pageUrl: `${appBaseUrl()}/shopping`,
+      });
+    }),
+  );
+
+  server.registerTool(
+    "add_shopping_items",
+    {
+      title: "Thêm vào danh sách cần mua",
+      description:
+        `Thêm 1 hoặc nhiều món (tối đa ${MAX_SHOPPING_BATCH}) vào danh sách cần mua của một kho — vd. linh kiện còn thiếu ` +
+        "cho mạch, món đồ để hoàn thiện bộ phối, nguyên liệu cho món ăn. Món trùng tên với món đang chờ mua thì gộp. " +
+        "itemId: gắn với mặt hàng có sẵn trong kho (mua thêm món đã có) để khi đánh dấu đã mua có thể nhập kho luôn.",
+      inputSchema: {
+        domain: domainSchema.optional().describe("Kho (mặc định electronics)"),
+        items: z
+          .array(
+            z.object({
+              name: z.string().min(1).max(200),
+              quantity: z.number().min(0).nullish(),
+              unit: z.string().max(30).nullish(),
+              note: z.string().max(500).nullish().describe("Lý do / dùng cho món gì, vd. 'cho mạch nháy LED 555'"),
+              itemId: z.number().int().positive().nullish().describe("id mặt hàng có sẵn (nếu mua thêm món đã có)"),
+            }),
+          )
+          .min(1)
+          .max(MAX_SHOPPING_BATCH),
+      },
+      annotations: writeHint,
+    },
+    run(true, async (a: { domain?: Domain; items: { name: string; quantity?: number | null; unit?: string | null; note?: string | null; itemId?: number | null }[] }) => {
+      const domain = writeDomain(a.domain);
+      const res = await addShoppingFor(auth.userId, domain, a.items);
+      return json({ domain, added: res.added.length, merged: res.merged.length, pageUrl: `${appBaseUrl()}/shopping` });
+    }),
+  );
+
+  server.registerTool(
+    "update_shopping_item",
+    {
+      title: "Sửa / đánh dấu món cần mua",
+      description:
+        "Đánh dấu đã mua (done=true; stockIn=true để nhập kho luôn nếu món gắn với mặt hàng có sẵn), sửa tên / số lượng / " +
+        "ghi chú, hoặc xoá khỏi danh sách (remove=true).",
+      inputSchema: {
+        id: z.number().int().positive(),
+        done: z.boolean().optional(),
+        stockIn: z.boolean().optional().describe("Cùng với done=true: nhập kho số lượng đã mua vào mặt hàng gắn kèm"),
+        name: z.string().min(1).max(200).optional(),
+        quantity: z.number().min(0).nullish(),
+        unit: z.string().max(30).nullish(),
+        note: z.string().max(500).nullish(),
+        itemId: z.number().int().positive().nullish(),
+        remove: z.boolean().optional(),
+      },
+      annotations: writeHint,
+    },
+    run(true, async (a: { id: number; done?: boolean; stockIn?: boolean; remove?: boolean; name?: string; quantity?: number | null; unit?: string | null; note?: string | null; itemId?: number | null }) => {
+      if (a.remove) {
+        const n = await removeShoppingFor(auth.userId, [a.id]);
+        return n ? json({ removed: true, id: a.id }) : fail(`Không có món id=${a.id}`);
+      }
+      const { id, done, stockIn, remove: _r, ...patch } = a;
+      if (Object.values(patch).some((v) => v !== undefined)) await updateShoppingFor(auth.userId, id, patch);
+      let stocked: number | undefined;
+      if (done !== undefined) ({ balance: stocked } = await setShoppingDoneFor(auth.userId, id, done, { stockIn }));
+      return json({ updated: true, id, done, stockedInQuantity: stocked });
     }),
   );
 

@@ -1,4 +1,5 @@
 import "server-only";
+import type { Domain } from "@/db/schema";
 import { normalizeText } from "@/lib/format";
 import { getCategoryTree, getLocationTree } from "@/lib/queries";
 import { InventoryError, createCategoryFor, createLocationFor } from "./mutations";
@@ -24,9 +25,11 @@ export async function resolveRef(
   ref: number | string | null | undefined,
   userId: string,
   createMissing: boolean,
+  /** Kho của mặt hàng: chỉ tìm / tạo danh mục, vị trí trong kho này */
+  domain: Domain,
 ): Promise<number | null> {
   if (ref == null || ref === "") return null;
-  const tree: Tree = kind === "category" ? await getCategoryTree() : await getLocationTree();
+  const tree: Tree = kind === "category" ? await getCategoryTree(domain) : await getLocationTree(domain);
   const label = kind === "category" ? "danh mục" : "vị trí";
 
   if (typeof ref === "number") {
@@ -69,9 +72,9 @@ export async function resolveRef(
     }
     parentId =
       kind === "category"
-        ? await createCategoryFor(userId, { name: part, parentId })
-        : await createLocationFor(userId, { name: part, parentId });
-    current = kind === "category" ? await getCategoryTree() : await getLocationTree();
+        ? await createCategoryFor(userId, { domain, name: part, parentId })
+        : await createLocationFor(userId, { domain, name: part, parentId });
+    current = kind === "category" ? await getCategoryTree(domain) : await getLocationTree(domain);
   }
   return parentId;
 }

@@ -6,6 +6,8 @@ import { db } from "@/db";
 import { categories, locations } from "@/db/schema";
 import { requireUser } from "@/lib/auth/session";
 import { parentProblem } from "@/lib/inventory/mutations";
+import { currentDomain } from "@/lib/domain-server";
+import { DOMAIN_CONFIG } from "@/lib/domains";
 import type { ActionResult } from "./items";
 
 type Table = typeof categories | typeof locations;
@@ -23,7 +25,17 @@ async function save(table: Table, id: number | null, fd: FormData): Promise<Acti
   const { name, parentId, description } = readCommon(fd);
   if (!name) return { ok: false, error: "Vui lòng nhập tên" };
 
-  const problem = await parentProblem(table, me.id, id, parentId);
+  // Sửa: giữ kho của mục; thêm mới: kho đang chọn
+  let domain = await currentDomain();
+  if (id != null) {
+    const [row] = await db
+      .select({ domain: table.domain })
+      .from(table)
+      .where(and(eq(table.id, id), eq(table.userId, me.id)));
+    if (!row) return { ok: false, error: "Không tìm thấy" };
+    domain = row.domain;
+  }
+  const problem = await parentProblem(table, me.id, id, parentId, domain);
   if (problem) return { ok: false, error: problem };
 
   const extra: Record<string, unknown> =
@@ -39,7 +51,7 @@ async function save(table: Table, id: number | null, fd: FormData): Promise<Acti
       .returning({ id: table.id });
     if (!updated.length) return { ok: false, error: "Không tìm thấy" };
   } else {
-    await db.insert(table).values({ name, parentId, description, userId: me.id, ...extra });
+    await db.insert(table).values({ name, parentId, description, userId: me.id, domain, ...extra });
   }
   revalidatePath("/", "layout");
   return { ok: true };
@@ -65,43 +77,50 @@ export async function deleteLocation(id: number) {
   revalidatePath("/", "layout");
 }
 
-const DEFAULT_CATEGORIES: [string, string[]][] = [
-  ["Điện trở", ["Điện trở cắm (THT)", "Điện trở dán (SMD)", "Biến trở / Triết áp"]],
-  ["Tụ điện", ["Tụ gốm", "Tụ hoá", "Tụ tantalum", "Tụ film"]],
-  ["Cuộn cảm & Biến áp", []],
-  ["Diode", ["Diode chỉnh lưu", "Diode zener", "Diode schottky", "LED"]],
-  ["Transistor", ["BJT", "MOSFET", "IGBT / Triac / SCR"]],
-  ["IC", ["Vi điều khiển", "IC nguồn / ổn áp", "Op-amp", "IC logic", "IC driver", "IC nhớ"]],
-  ["Module", ["Module cảm biến", "Module truyền thông", "Module nguồn", "Màn hình", "Board phát triển"]],
-  ["Đầu nối & Dây", ["Header / Jumper", "Terminal", "Jack / USB", "Dây điện"]],
-  ["Công tắc & Nút nhấn", []],
-  ["Relay", []],
-  ["Thạch anh & Dao động", []],
-  ["Cầu chì & Bảo vệ", []],
-  ["Pin & Nguồn", []],
-  ["Cơ khí", ["Ốc vít / Trụ đồng", "Vỏ hộp", "Quạt / Tản nhiệt"]],
-  ["Dụng cụ", ["Dụng cụ hàn", "Dụng cụ đo", "Dụng cụ cắt / kìm", "Dụng cụ khác"]],
-  ["Vật tư tiêu hao", ["Thiếc hàn", "Nhựa thông / Flux", "Băng keo / Ống co nhiệt", "Phíp đồng / PCB"]],
-];
-
+/** Tạo sẵn bộ danh mục phổ biến của kho đang chọn (chỉ khi kho đó chưa có danh mục nào) */
 export async function seedDefaultCategories() {
   const me = await requireUser();
+  const domain = await currentDomain();
   const existing = await db
     .select({ id: categories.id })
     .from(categories)
-    .where(eq(categories.userId, me.id))
+    .where(and(eq(categories.userId, me.id), eq(categories.domain, domain)))
     .limit(1);
   if (existing.length) return;
   await db.transaction(async (tx) => {
-    for (const [i, [name, children]] of DEFAULT_CATEGORIES.entries()) {
+    for (const [i, [name, children]] of DOMAIN_CONFIG[domain].categoryPresets.entries()) {
       const [parent] = await tx
         .insert(categories)
-        .values({ name, sortOrder: i, userId: me.id })
+        .values({ name, sortOrder: i, userId: me.id, domain })
         .returning({ id: categories.id });
       if (children.length) {
         await tx
           .insert(categories)
-          .values(children.map((c, j) => ({ name: c, parentId: parent.id, sortOrder: j, userId: me.id })));
+          .values(children.map((c, j) => ({ name: c, parentId: parent.id, sortOrder: j, userId: me.id, domain })));
+      }
+    }
+  });
+  revalidatePath("/", "layout");
+}
+
+/** Tạo sẵn vị trí cất phổ biến của kho đang chọn (tủ lạnh / ngăn đá, tủ quần áo / kệ giày…) */
+export async function seedDefaultLocations() {
+  const me = await requireUser();
+  const domain = await currentDomain();
+  const existing = await db
+    .select({ id: locations.id })
+    .from(locations)
+    .where(and(eq(locations.userId, me.id), eq(locations.domain, domain)))
+    .limit(1);
+  if (existing.length) return;
+  await db.transaction(async (tx) => {
+    for (const [name, children] of DOMAIN_CONFIG[domain].locationPresets) {
+      const [parent] = await tx
+        .insert(locations)
+        .values({ name, userId: me.id, domain })
+        .returning({ id: locations.id });
+      if (children.length) {
+        await tx.insert(locations).values(children.map((c) => ({ name: c, parentId: parent.id, userId: me.id, domain })));
       }
     }
   });

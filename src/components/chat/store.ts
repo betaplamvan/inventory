@@ -62,18 +62,19 @@ const notifyActivity = () => window.dispatchEvent(new Event("kho:chat-activity")
 
 /* ---------------- Cuộc trò chuyện gần nhất (khung nổi mở lại đúng cuộc đó) ---------------- */
 
-const LAST_KEY = "inv-chat-last";
-export function readLast() {
+/** Mỗi kho nhớ cuộc trò chuyện gần nhất riêng */
+const lastKey = (domain: string) => `inv-chat-last:${domain}`;
+export function readLast(domain: string) {
   try {
-    return localStorage.getItem(LAST_KEY);
+    return localStorage.getItem(lastKey(domain));
   } catch {
     return null;
   }
 }
-export function writeLast(id: string | null) {
+export function writeLast(domain: string, id: string | null) {
   try {
-    if (id) localStorage.setItem(LAST_KEY, id);
-    else localStorage.removeItem(LAST_KEY);
+    if (id) localStorage.setItem(lastKey(domain), id);
+    else localStorage.removeItem(lastKey(domain));
   } catch {}
 }
 
@@ -255,6 +256,32 @@ export function decide(key: string, call: UiToolCall, decision: ChatDecision) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ conversationId: id, decisions: next }),
+      signal,
+    }),
+  );
+}
+
+/** Xác nhận / bỏ qua tất cả thao tác đang chờ trong một lần */
+export function decideAll(key: string, decision: ChatDecision) {
+  const s = get(key);
+  if (s.status === "streaming" || isDraft(resolve(key))) return;
+  const pending = awaitingCalls(s.messages);
+  if (!pending.length) return;
+  const all = { ...s.decisions, ...Object.fromEntries(pending.map((c) => [c.id, decision])) };
+  update(key, (x) => ({
+    ...x,
+    decisions: {},
+    messages: pending.reduce(
+      (acc, c) => updateCall(acc, c.id, { status: decision === "approve" ? "running" : "rejected" }),
+      x.messages,
+    ),
+  }));
+  const id = resolve(key);
+  void follow(id, (signal) =>
+    fetch("/api/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ conversationId: id, decisions: all }),
       signal,
     }),
   );

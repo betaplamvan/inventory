@@ -5,18 +5,27 @@ import { usePathname } from "next/navigation";
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { Bot, Maximize2, MessageSquarePlus, X } from "lucide-react";
 import { ChatPanel } from "./chat-panel";
+import type { Domain } from "@/lib/domains";
+import { useDomain } from "../domain";
 import { isDraft, newDraftKey, readLast, writeLast } from "./store";
 
 /** Nút nổi mở nhanh trợ lý ở mọi trang (ẩn ở trang /chat). usePathname cần Suspense. */
 export function ChatLauncher() {
   return (
     <Suspense fallback={null}>
-      <Launcher />
+      <DomainLauncher />
     </Suspense>
   );
 }
 
-function Launcher() {
+/** Đổi kho → mount lại khung chat (đóng lại, lần mở sau là cuộc trò chuyện của kho mới). Stream đang chạy vẫn giữ trong store. */
+function DomainLauncher() {
+  const domain = useDomain();
+  if (!domain) return null;
+  return <Launcher key={domain} domain={domain} />;
+}
+
+function Launcher({ domain }: { domain: Domain }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
@@ -26,7 +35,7 @@ function Launcher() {
 
   const show = () => {
     // Mở lại đúng cuộc gần nhất (có thể vừa đổi ở trang /chat); cuộc mới chưa gửi thì giữ nguyên
-    const last = readLast();
+    const last = readLast(domain);
     if (last && last !== conversationKey) setConversationKey(last);
     setMounted(true);
     setOpen(true);
@@ -49,14 +58,14 @@ function Launcher() {
 
   const onCreated = useCallback((id: string) => {
     setConversationKey(id);
-    writeLast(id);
-  }, []);
+    writeLast(domain, id);
+  }, [domain]);
 
   if (pathname?.startsWith("/chat")) return null;
 
   const startNew = () => {
     setConversationKey(newDraftKey());
-    writeLast(null);
+    writeLast(domain, null);
   };
 
   return (
@@ -113,7 +122,13 @@ function Launcher() {
             </button>
           </header>
           <div className="min-h-0 flex-1">
-            <ChatPanel conversationKey={conversationKey} onCreated={onCreated} onNotFound={startNew} compact />
+            <ChatPanel
+              conversationKey={conversationKey}
+              domain={domain}
+              onCreated={onCreated}
+              onNotFound={startNew}
+              compact
+            />
           </div>
         </div>
       )}

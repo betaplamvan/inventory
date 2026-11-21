@@ -7,10 +7,12 @@ import { ConfirmButton } from "@/components/confirm-button";
 import { Tour, TourButton } from "@/components/tour";
 import { MediaGallery } from "@/components/media-gallery";
 import { MovementForm } from "@/components/movement-form";
-import { KindBadge, MovementIcon, Skeleton, StockQty, StockStateBadge } from "@/components/ui";
+import { DomainSync } from "@/components/domain";
+import { ExpiryBadge, KindBadge, MovementIcon, Skeleton, StockQty, StockStateBadge } from "@/components/ui";
+import { DOMAIN_CONFIG } from "@/lib/domains";
 import { MOVEMENT_LABELS, sourceLabel } from "@/lib/constants";
 import { TRASH_DAYS } from "@/lib/inventory/trash";
-import { fmtDateTime, fmtMoney, fmtQty } from "@/lib/format";
+import { fmtDate, fmtDateTime, fmtMoney, fmtQty } from "@/lib/format";
 import { getCategoryTree, getItem, getItemMovements, getLocationTree } from "@/lib/queries";
 
 export async function generateMetadata(props: PageProps<"/items/[id]">) {
@@ -54,13 +56,10 @@ async function ItemDetail({
   const restored = sp.restored === "1";
   const skuCleared = typeof sp.skuCleared === "string" ? sp.skuCleared : null;
   const itemId = Number(id);
-  const [item, movements, categories, locations] = await Promise.all([
-    getItem(itemId),
-    getItemMovements(itemId),
-    getCategoryTree(),
-    getLocationTree(),
-  ]);
+  const [item, movements] = await Promise.all([getItem(itemId), getItemMovements(itemId)]);
   if (!item) notFound();
+  const cfg = DOMAIN_CONFIG[item.domain];
+  const [categories, locations] = await Promise.all([getCategoryTree(item.domain), getLocationTree(item.domain)]);
 
   const categoryPath = categories.find((c) => c.id === item.categoryId)?.path;
   const locationPath = locations.find((l) => l.id === item.locationId)?.path;
@@ -68,7 +67,8 @@ async function ItemDetail({
 
   const specRows: [string, React.ReactNode][] = [
     ["Mã riêng (SKU)", item.sku && <span className="font-mono">{item.sku}</span>],
-    ["Hãng sản xuất", item.manufacturer],
+    ["Hạn sử dụng", item.expiresAt && fmtDate(item.expiresAt)],
+    [cfg.manufacturerLabel ?? "Hãng", item.manufacturer],
     ["MPN", item.mpn && <span className="font-mono">{item.mpn}</span>],
     ["Package", item.package],
     ...item.specs.map((s) => [s.key || "—", s.value] as [string, React.ReactNode]),
@@ -76,6 +76,7 @@ async function ItemDetail({
 
   return (
     <>
+      <DomainSync domain={item.domain} />
       {restored && (
         <div className="mb-4 rounded-lg border border-accent/30 bg-accent-soft px-4 py-3 text-sm text-accent-strong">
           Đã khôi phục từ thùng rác.
@@ -88,6 +89,7 @@ async function ItemDetail({
           <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-muted">
             <KindBadge kind={item.kind} />
             <StockStateBadge quantity={item.quantity} minQuantity={item.minQuantity} />
+            {item.quantity > 0 && <ExpiryBadge date={item.expiresAt} days={item.expiryDays} />}
             {categoryPath && (
               <Link href={`/items?category=${item.categoryId}`} className="hover:text-foreground hover:underline">
                 {categoryPath}
@@ -145,7 +147,7 @@ async function ItemDetail({
           </section>
 
           <section className="card p-4">
-            <h2 className="mb-3 text-sm font-semibold">Thông số</h2>
+            <h2 className="mb-3 text-sm font-semibold">{cfg.specsTitle}</h2>
             {specRows.length === 0 ? (
               <p className="text-sm text-muted">Chưa có thông số.</p>
             ) : (

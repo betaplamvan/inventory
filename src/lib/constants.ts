@@ -7,6 +7,20 @@ export const KIND_LABELS: Record<ItemKind, string> = {
   consumable: "Vật tư tiêu hao",
   equipment: "Thiết bị đo",
   other: "Khác",
+  top: "Áo",
+  bottom: "Quần / chân váy",
+  dress: "Váy / đầm",
+  outerwear: "Áo khoác",
+  shoes: "Giày dép",
+  accessory: "Phụ kiện",
+  produce: "Rau củ quả",
+  protein: "Thịt cá trứng",
+  dairy: "Sữa & chế phẩm",
+  grain: "Gạo & đồ khô",
+  spice: "Gia vị",
+  drink: "Đồ uống",
+  snack: "Đồ ăn vặt",
+  cooked: "Món đã nấu",
 };
 
 export const KIND_COLORS: Record<ItemKind, string> = {
@@ -16,6 +30,20 @@ export const KIND_COLORS: Record<ItemKind, string> = {
   consumable: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300",
   equipment: "bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300",
   other: "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300",
+  top: "bg-pink-100 text-pink-800 dark:bg-pink-950 dark:text-pink-300",
+  bottom: "bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300",
+  dress: "bg-fuchsia-100 text-fuchsia-800 dark:bg-fuchsia-950 dark:text-fuchsia-300",
+  outerwear: "bg-slate-200 text-slate-800 dark:bg-slate-800 dark:text-slate-200",
+  shoes: "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300",
+  accessory: "bg-teal-100 text-teal-800 dark:bg-teal-950 dark:text-teal-300",
+  produce: "bg-lime-100 text-lime-800 dark:bg-lime-950 dark:text-lime-300",
+  protein: "bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300",
+  dairy: "bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-300",
+  grain: "bg-yellow-100 text-yellow-800 dark:bg-yellow-950 dark:text-yellow-300",
+  spice: "bg-orange-100 text-orange-800 dark:bg-orange-950 dark:text-orange-300",
+  drink: "bg-cyan-100 text-cyan-800 dark:bg-cyan-950 dark:text-cyan-300",
+  snack: "bg-violet-100 text-violet-800 dark:bg-violet-950 dark:text-violet-300",
+  cooked: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300",
 };
 
 export const ITEM_KINDS = Object.keys(KIND_LABELS) as ItemKind[];
@@ -35,6 +63,5 @@ export function sourceLabel(m: { source: MovementSource | null; sourceName: stri
   return m.sourceName ? `${base} · ${m.sourceName}` : base;
 }
 
-export const UNITS = ["cái", "con", "bộ", "chiếc", "cuộn", "mét", "gram", "hộp", "túi", "tấm", "lọ", "cặp"];
 
 export const PAGE_SIZE = 24;

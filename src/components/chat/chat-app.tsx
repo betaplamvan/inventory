@@ -5,6 +5,7 @@ import { History, MessageSquarePlus, Trash2, X } from "lucide-react";
 import type { ConversationSummary } from "@/lib/chat/types";
 import { fmtDateTime } from "@/lib/format";
 import { ChatPanel } from "./chat-panel";
+import type { Domain } from "@/lib/domains";
 import { forget, newDraftKey, writeLast } from "./store";
 
 /** Đổi ?c= trên thanh địa chỉ mà không điều hướng (giữ nguyên trạng thái đang stream) */
@@ -15,7 +16,7 @@ function syncUrl(id: string | null) {
   window.history.replaceState(window.history.state, "", url);
 }
 
-export function ChatApp({ initialId }: { initialId: string | null }) {
+export function ChatApp({ initialId, domain }: { initialId: string | null; domain: Domain }) {
   /** id cuộc trò chuyện đang mở, hoặc khoá nháp "new:…" cho cuộc mới */
   const [activeKey, setActiveKey] = useState<string>(() => initialId ?? newDraftKey());
   const activeId = activeKey.startsWith("new:") ? null : activeKey;
@@ -40,13 +41,13 @@ export function ChatApp({ initialId }: { initialId: string | null }) {
 
   // Khung chat nổi ở trang khác mở lại đúng cuộc đang xem
   useEffect(() => {
-    if (initialId) writeLast(initialId);
-  }, [initialId]);
+    if (initialId) writeLast(domain, initialId);
+  }, [domain, initialId]);
 
   const open = (id: string | null) => {
     setActiveKey(id ?? newDraftKey());
     syncUrl(id);
-    writeLast(id);
+    writeLast(domain, id);
     setDrawer(false);
   };
 
@@ -61,9 +62,9 @@ export function ChatApp({ initialId }: { initialId: string | null }) {
   const onCreated = useCallback((id: string, title: string) => {
     setActiveKey(id);
     syncUrl(id);
-    writeLast(id);
+    writeLast(domain, id);
     setList((l) => [{ id, title, updatedAt: new Date().toISOString() }, ...(l ?? [])]);
-  }, []);
+  }, [domain]);
 
   const sidebar = (
     <div className="flex h-full min-h-0 flex-col">
@@ -129,7 +130,7 @@ export function ChatApp({ initialId }: { initialId: string | null }) {
           </button>
         </header>
         <div className="min-h-0 flex-1">
-          <ChatPanel conversationKey={activeKey} onCreated={onCreated} onNotFound={() => open(null)} />
+          <ChatPanel conversationKey={activeKey} domain={domain} onCreated={onCreated} onNotFound={() => open(null)} />
         </div>
       </section>
 

@@ -2,7 +2,7 @@ import "server-only";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
-import type { ChatToolStatus } from "@/db/schema";
+import type { ChatToolStatus, Domain } from "@/db/schema";
 import { buildMcpServer } from "@/lib/mcp/server";
 import type { LlmTool } from "./llm";
 
@@ -28,11 +28,12 @@ type Toolset = {
   close(): Promise<void>;
 };
 
-async function connect(userId: string) {
+async function connect(userId: string, defaultDomain?: Domain) {
   const server = buildMcpServer({
     userId,
     scope: "write",
     tokenName: CHAT_AGENT_NAME,
+    defaultDomain,
   });
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   await server.connect(serverTransport);
@@ -41,8 +42,9 @@ async function connect(userId: string) {
   return { server, client };
 }
 
-export async function openToolset(userId: string): Promise<Toolset> {
-  const { server, client } = await connect(userId);
+/** defaultDomain: kho của cuộc trò chuyện — tool không truyền domain sẽ làm việc với kho này */
+export async function openToolset(userId: string, defaultDomain?: Domain): Promise<Toolset> {
+  const { server, client } = await connect(userId, defaultDomain);
   const { tools } = await client.listTools();
   const usable = tools.filter((t) => !EXCLUDED.has(t.name));
 

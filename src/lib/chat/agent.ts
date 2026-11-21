@@ -10,6 +10,7 @@ import {
   type ChatToolStatus,
 } from "@/db/schema";
 import { TRASH_DAYS } from "@/lib/inventory/trash";
+import { DOMAIN_CONFIG, type Domain } from "@/lib/domains";
 import { LlmError, streamChat, type LlmMessage } from "./llm";
 import { openToolset, toolCatalog, type ToolMeta } from "./tools";
 import type { ChatDecision, ChatStreamEvent, ConversationSummary, UiMessage, UiToolCall } from "./types";
@@ -23,7 +24,8 @@ const MAX_HISTORY = 60;
 /* Lưu trữ hội thoại                                                   */
 /* ------------------------------------------------------------------ */
 
-export async function listConversations(userId: string, limit = 50): Promise<ConversationSummary[]> {
+/** Cuộc trò chuyện của một kho (trang /chat hiện theo kho đang chọn) */
+export async function listConversations(userId: string, domain?: Domain, limit = 50): Promise<ConversationSummary[]> {
   const rows = await db
     .select({
       id: chatConversations.id,
@@ -31,7 +33,7 @@ export async function listConversations(userId: string, limit = 50): Promise<Con
       updatedAt: chatConversations.updatedAt,
     })
     .from(chatConversations)
-    .where(eq(chatConversations.userId, userId))
+    .where(and(eq(chatConversations.userId, userId), domain ? eq(chatConversations.domain, domain) : undefined))
     .orderBy(desc(chatConversations.updatedAt))
     .limit(limit);
   return rows.map((r) => ({ ...r, updatedAt: r.updatedAt.toISOString() }));
@@ -70,10 +72,10 @@ export async function lastMessageId(conversationId: string) {
   return Number(r?.id ?? 0);
 }
 
-export async function createConversation(userId: string, firstMessage: string) {
+export async function createConversation(userId: string, firstMessage: string, domain: Domain) {
   const [conv] = await db
     .insert(chatConversations)
-    .values({ userId, title: titleFrom(firstMessage) })
+    .values({ userId, domain, title: titleFrom(firstMessage) })
     .returning();
   return conv;
 }
@@ -165,16 +167,27 @@ function uiCall(c: ChatToolCall, m: ToolMeta | undefined): UiToolCall {
  * giữ nguyên phần đầu này thì llama.cpp dùng lại cache (đọc lại toàn bộ tool mất ~30 giây).
  * Ngày hiện tại được gắn vào tin nhắn mới nhất của người dùng (xem withToday).
  */
-function systemPrompt(user: { name: string | null; email: string }) {
+function systemPrompt(user: { name: string | null; email: string }, domain: Domain) {
+  const cfg = DOMAIN_CONFIG[domain];
   return [
-    `Bạn là trợ lý của app "Kho linh kiện" — kho linh kiện điện tử cá nhân (linh kiện, module, dụng cụ, vật tư) của ${user.name || user.email}.`,
+    `Bạn là trợ lý của app "Kho đồ" của ${user.name || user.email}. App có 3 kho: Kho linh kiện (domain electronics), ` +
+      `Tủ quần áo (wardrobe), Tủ bếp (pantry). Cuộc trò chuyện này thuộc ${cfg.space} (${cfg.description.toLowerCase()}); ` +
+      `tool tự làm việc với kho này nếu không truyền domain.`,
+    "",
+    cfg.assistant.role,
     "",
     "Quy tắc:",
     "- Luôn dùng tool để lấy dữ liệu thật trước khi trả lời về kho. Không bịa tên, số lượng, giá, vị trí. Không tìm thấy thì nói rõ.",
+    "- Khi thêm / sửa mặt hàng chỉ điền thông tin người dùng nói hoặc hiển nhiên từ tên (màu, size…); KHÔNG tự đặt giá, thương hiệu, nhà cung cấp.",
     "- Trả lời bằng tiếng Việt, ngắn gọn, dùng markdown; danh sách nhiều mặt hàng thì dùng bảng. Tiền là VNĐ, viết dạng 30.000 ₫.",
     "- Khi nhắc tới một mặt hàng, chèn link markdown [tên](url) với url lấy từ kết quả tool.",
+    "- Brainstorm / gợi ý: luôn dựa trên inventory_snapshot (những gì THỰC SỰ có), nói rõ món nào đã có, món nào cần mua thêm.",
+    "- Người dùng bảo thêm vào danh sách cần mua (hoặc đồng ý) thì gọi add_shopping_items NGAY trong lượt trả lời đó với các món còn thiếu — không hỏi lại 'có muốn thêm không'.",
     "- Tìm bằng search_items trước khi thêm mới để tránh trùng. Đổi số lượng bằng record_movement (in = nhập thêm, out = lấy ra dùng, adjust = đặt số lượng thực tế khi kiểm kê) để có lịch sử.",
-    '- Thêm nhiều mặt hàng một lúc thì dùng import_items. Danh mục / vị trí truyền bằng tên, ví dụ "Tụ điện > Tụ gốm".',
+    '- Thêm từ 2 món trở lên thì dùng MỘT lệnh import_items (người dùng chỉ phải xác nhận một lần), không gọi create_item nhiều lần. Danh mục / vị trí truyền bằng tên, ví dụ "Tụ điện > Tụ gốm", "Tủ lạnh > Ngăn mát".',
+    "- Khi thêm mặt hàng luôn truyền createMissing=true để tự tạo danh mục / vị trí còn thiếu trong cùng lệnh — KHÔNG tạo riêng từng danh mục / vị trí trước.",
+    "- Ngày (hạn sử dụng expiresAt) truyền dạng YYYY-MM-DD, vd. 2026-11-23.",
+    "- Luôn truyền kind đúng nhóm trong kho cho từng món (xem mô tả tham số kind), vd. trứng / thịt = protein, gạo = grain, nước mắm = spice, áo sơ mi = top, giày = shoes, điện trở = component.",
     `- delete_item chỉ chuyển vào thùng rác (khôi phục bằng restore_item trong ${TRASH_DAYS} ngày).`,
     "- Thao tác ghi (thêm, sửa, nhập/xuất, xoá…): gọi tool luôn — app tự hiện nút Xác nhận cho người dùng, KHÔNG hỏi lại bằng lời. Nếu người dùng từ chối thì không thử lại trừ khi họ yêu cầu.",
     "- Thiếu thông tin bắt buộc (ví dụ số lượng, mặt hàng nào) thì hỏi lại ngắn gọn thay vì đoán.",
@@ -259,7 +272,12 @@ export async function* runChat(opts: {
   const { user, signal, conversationId } = opts;
   const message = opts.message?.trim() || null;
 
-  const toolset = await openToolset(user.id);
+  const [conv] = await db
+    .select({ domain: chatConversations.domain })
+    .from(chatConversations)
+    .where(eq(chatConversations.id, conversationId));
+  const domain: Domain = conv?.domain ?? "electronics";
+  const toolset = await openToolset(user.id, domain);
   try {
     // 1. Xử lý các thao tác ghi đang chờ xác nhận
     const rows = await loadMessages(conversationId);
@@ -326,7 +344,7 @@ export async function* runChat(opts: {
     for (let step = 0; step < MAX_STEPS && !awaiting; step++) {
       const history = await loadMessages(conversationId);
       const messages: LlmMessage[] = [
-        { role: "system", content: systemPrompt(user) },
+        { role: "system", content: systemPrompt(user, domain) },
         ...withToday(toLlmMessages(history)),
       ];
 

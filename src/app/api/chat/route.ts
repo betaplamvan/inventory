@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { getCurrentUser } from "@/lib/auth/session";
 import { createConversation, getConversation } from "@/lib/chat/agent";
+import { currentDomain } from "@/lib/domain-server";
 import { llmConfigured } from "@/lib/chat/llm";
 import { RunBusyError, runStream, startRun } from "@/lib/chat/runs";
 
@@ -34,7 +35,8 @@ export async function POST(req: Request) {
     id = conv.id;
   } else {
     if (!message) return Response.json({ error: "Tin nhắn trống" }, { status: 400 });
-    const conv = await createConversation(me.id, message);
+    // Cuộc mới thuộc kho đang chọn (cookie) — quyết định vai trò trợ lý và kho mặc định của tool
+    const conv = await createConversation(me.id, message, await currentDomain());
     id = conv.id;
     created = { title: conv.title };
   }

@@ -18,7 +18,7 @@ export default function LoginPage(props: PageProps<"/login">) {
     <>
       <div className="mb-6 text-center">
         <h1 className="text-lg font-semibold">Đăng nhập</h1>
-        <p className="mt-1 text-sm text-muted">Mỗi tài khoản Google có một kho linh kiện riêng</p>
+        <p className="mt-1 text-sm text-muted">Mỗi tài khoản Google có riêng kho linh kiện, tủ quần áo và tủ bếp</p>
       </div>
       <Suspense fallback={<GoogleButton next="/" />}>
         <LoginBody searchParams={props.searchParams} />

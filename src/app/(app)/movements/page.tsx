@@ -6,6 +6,7 @@ import type { MovementType } from "@/db/schema";
 import { MOVEMENT_LABELS, sourceLabel } from "@/lib/constants";
 import { fmtDateTime, fmtMoney, fmtQty } from "@/lib/format";
 import { listMovements } from "@/lib/queries";
+import { currentDomain } from "@/lib/domain-server";
 import { EmptyState, ListSkeleton, MovementIcon, PageHeader, Pagination, qs } from "@/components/ui";
 
 export const metadata = { title: "Nhập / Xuất" };
@@ -29,7 +30,7 @@ async function Movements({ searchParams }: { searchParams: PageProps<"/movements
   const typeRaw = one(sp.type);
   const type = typeRaw && typeRaw in MOVEMENT_LABELS ? (typeRaw as MovementType) : undefined;
   const page = Number(one(sp.page)) || 1;
-  const { rows, total, pageCount } = await listMovements({ q, type, page });
+  const { rows, total, pageCount } = await listMovements({ domain: await currentDomain(), q, type, page });
 
   return (
     <>

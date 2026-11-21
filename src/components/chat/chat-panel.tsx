@@ -15,15 +15,10 @@ import {
   X,
 } from "lucide-react";
 import type { ChatDecision, UiToolCall, UiToolStatus } from "@/lib/chat/types";
+import { DOMAIN_CONFIG, type Domain } from "@/lib/domains";
 import { ChatMarkdown } from "./markdown";
-import { decide, isDraft, openConversation, sendMessage, stop, useChatState } from "./store";
+import { decide, decideAll, isDraft, openConversation, sendMessage, stop, useChatState } from "./store";
 
-const SUGGESTIONS = [
-  "Mặt hàng nào sắp hết cần mua thêm?",
-  "Tổng giá trị kho hiện tại là bao nhiêu?",
-  "Tìm tụ gốm 100nF",
-  "Nhập thêm 10 con điện trở 10k",
-];
 
 /**
  * Khung chat cho 1 cuộc trò chuyện. Trạng thái và kết nối stream nằm trong store dùng chung (./store),
@@ -38,9 +33,12 @@ type Props = {
   /** Cuộc trò chuyện không còn (đã xoá) */
   onNotFound?: () => void;
   compact?: boolean;
+  /** Kho của khung chat — lời chào và câu gợi ý theo kho */
+  domain: Domain;
 };
 
-export function ChatPanel({ conversationKey, onCreated, onNotFound, compact }: Props) {
+export function ChatPanel({ conversationKey, onCreated, onNotFound, compact, domain }: Props) {
+  const cfg = DOMAIN_CONFIG[domain];
   const { messages, status, thinking, error } = useChatState(conversationKey);
   const streaming = status === "streaming";
   const loading = status === "loading";
@@ -84,6 +82,10 @@ export function ChatPanel({ conversationKey, onCreated, onNotFound, compact }: P
   };
 
   const empty = !loading && messages.length === 0;
+  const pendingCount = messages.reduce(
+    (n, m) => n + m.parts.filter((p) => p.type === "tool" && p.call.status === "awaiting").length,
+    0,
+  );
   const last = messages.at(-1);
   const showPending = streaming && (thinking || last?.role !== "assistant" || last.parts.at(-1)?.type === "tool");
 
@@ -106,14 +108,14 @@ export function ChatPanel({ conversationKey, onCreated, onNotFound, compact }: P
               <Bot className="size-6" />
             </span>
             <div>
-              <p className="font-semibold">Trợ lý kho linh kiện</p>
+              <p className="font-semibold">Trợ lý {cfg.space.toLowerCase()}</p>
               <p className="mt-1 text-sm text-muted">
                 Hỏi về hàng tồn, tìm linh kiện, thêm hay nhập / xuất kho. Thao tác thay đổi dữ liệu luôn chờ bạn bấm xác
                 nhận.
               </p>
             </div>
             <div className="flex flex-wrap justify-center gap-2">
-              {SUGGESTIONS.map((s) => (
+              {cfg.assistant.suggestions.map((s) => (
                 <button
                   key={s}
                   type="button"
@@ -158,6 +160,18 @@ export function ChatPanel({ conversationKey, onCreated, onNotFound, compact }: P
                 </div>
               </div>
             ),
+          )}
+
+          {!streaming && pendingCount >= 2 && (
+            <div className="flex flex-wrap items-center gap-2 rounded-xl border border-accent/60 bg-accent-soft/40 px-3 py-2 text-sm">
+              <span className="mr-auto">{pendingCount} thao tác đang chờ xác nhận</span>
+              <button type="button" className="btn-primary btn-sm px-3" onClick={() => decideAll(conversationKey, "approve")}>
+                <Check className="size-3.5" /> Xác nhận tất cả
+              </button>
+              <button type="button" className="btn-secondary btn-sm px-3" onClick={() => decideAll(conversationKey, "reject")}>
+                <X className="size-3.5" /> Bỏ qua tất cả
+              </button>
+            </div>
           )}
 
           {showPending && (

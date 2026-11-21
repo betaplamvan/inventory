@@ -77,7 +77,7 @@ async function Account() {
 
       {authorSupportEnabled() && (
         <p className="pt-2 text-center text-xs text-muted">
-          Kho linh kiện là phần mềm mã nguồn mở, miễn phí.{" "}
+          Kho đồ là phần mềm mã nguồn mở, miễn phí.{" "}
           <Link href="/support" className="inline-flex items-center gap-1 font-medium text-accent-strong hover:underline">
             <Heart className="size-3" /> Ủng hộ tác giả
           </Link>

@@ -19,6 +19,13 @@ export function fmtDateTime(d: Date | string) {
   return dateTimeFmt.format(typeof d === "string" ? new Date(d) : d);
 }
 
+/** "2026-11-24" → "24/11/2026" (ngày thuần, không qua Date để khỏi lệch múi giờ) */
+export function fmtDate(d: string | null | undefined, opts: { short?: boolean } = {}) {
+  const m = d?.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return "";
+  return opts.short ? `${m[3]}/${m[2]}` : `${m[3]}/${m[2]}/${m[1]}`;
+}
+
 export function fmtBytes(bytes: number) {
   if (bytes < 1024) return `${bytes} B`;
   const units = ["KB", "MB", "GB"];

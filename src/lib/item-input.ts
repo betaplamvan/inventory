@@ -1,7 +1,8 @@
 import { z } from "zod";
 import { ITEM_KINDS } from "./constants";
+import { DOMAINS, DOMAIN_CONFIG, kindAllowed, type Domain } from "./domains";
 import { normalizeText } from "./format";
-import type { Spec } from "@/db/schema";
+import type { ItemKind, Spec } from "@/db/schema";
 
 const str = (s: FormDataEntryValue | null) => (typeof s === "string" ? s.trim() : "");
 const optStr = (s: FormDataEntryValue | null) => str(s) || null;
@@ -35,7 +36,9 @@ const url = z
   .nullable()
   .refine((s) => !s || /^https?:\/\//i.test(s), "Link phải bắt đầu bằng http:// hoặc https://");
 
-export const itemSchema = z.object({
+export const itemSchema = z
+  .object({
+  domain: z.enum(DOMAINS as [Domain, ...Domain[]]),
   name: z.string().min(1, "Vui lòng nhập tên").max(300),
   sku: z.string().max(100).nullable(),
   kind: z.enum(ITEM_KINDS as [string, ...string[]]),
@@ -55,7 +58,16 @@ export const itemSchema = z.object({
   purchaseUrl: url,
   datasheetUrl: url,
   notes: z.string().max(10000).nullable(),
-});
+  /** Hạn sử dụng YYYY-MM-DD (kho thực phẩm) */
+  expiresAt: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Hạn sử dụng phải có dạng YYYY-MM-DD")
+    .nullable(),
+  })
+  .refine((v) => kindAllowed(v.domain, v.kind as ItemKind), {
+    path: ["kind"],
+    message: "Loại này không thuộc kho đang chọn",
+  });
 
 export type ItemInput = z.infer<typeof itemSchema>;
 
@@ -80,10 +92,12 @@ export function itemFromFormData(fd: FormData) {
     return Number.isInteger(n) && n > 0 ? n : null;
   };
 
+  const domain = (str(fd.get("domain")) || "electronics") as Domain;
   return itemSchema.safeParse({
+    domain,
     name: str(fd.get("name")),
     sku: optStr(fd.get("sku")),
-    kind: str(fd.get("kind")) || "component",
+    kind: str(fd.get("kind")) || DOMAIN_CONFIG[domain]?.defaultKind || "other",
     categoryId: id(fd.get("categoryId")),
     locationId: id(fd.get("locationId")),
     manufacturer: optStr(fd.get("manufacturer")),
@@ -92,7 +106,7 @@ export function itemFromFormData(fd: FormData) {
     description: optStr(fd.get("description")),
     specs,
     tags,
-    unit: str(fd.get("unit")) || "cái",
+    unit: str(fd.get("unit")) || DOMAIN_CONFIG[domain]?.defaultUnit || "cái",
     quantity: parseNum(fd.get("quantity")) ?? 0,
     minQuantity: parseNum(fd.get("minQuantity")) ?? 0,
     unitPrice: parseNum(fd.get("unitPrice")),
@@ -100,6 +114,7 @@ export function itemFromFormData(fd: FormData) {
     purchaseUrl: optStr(fd.get("purchaseUrl")),
     datasheetUrl: optStr(fd.get("datasheetUrl")),
     notes: optStr(fd.get("notes")),
+    expiresAt: optStr(fd.get("expiresAt")),
   });
 }
 

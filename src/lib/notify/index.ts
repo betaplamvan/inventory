@@ -136,15 +136,15 @@ async function sendStockAlert(userId: string, itemId: number, state: StockState)
     .filter(Boolean)
     .join("\n");
 
-  await deliver(to, { subject: `[Kho linh kiện] ${title}: ${it.name}`, text, html });
+  await deliver(to, { subject: `[Kho đồ] ${title}: ${it.name}`, text, html });
 }
 
 /** Nút "Gửi thử" ở trang Tài khoản. Trả về số kênh đã gửi (0 = chưa bật kênh nào). */
 export async function sendTestNotification(userId: string) {
   const to = await channelsOf(userId);
   return deliver(to, {
-    subject: "[Kho linh kiện] Thông báo thử",
-    text: `Thông báo thử từ Kho linh kiện. Khi mặt hàng tụt xuống mức tối thiểu, bạn sẽ nhận tin ở đây.\n${appBaseUrl()}`,
+    subject: "[Kho đồ] Thông báo thử",
+    text: `Thông báo thử từ Kho đồ. Khi mặt hàng tụt xuống mức tối thiểu, bạn sẽ nhận tin ở đây.\n${appBaseUrl()}`,
     html: `✅ <b>Thông báo thử</b>\nKhi mặt hàng tụt xuống mức tối thiểu, bạn sẽ nhận tin ở đây.\n<a href="${appBaseUrl()}">Mở kho</a>`,
   });
 }

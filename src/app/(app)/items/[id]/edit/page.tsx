@@ -4,6 +4,7 @@ import { Suspense } from "react";
 import { ChevronLeft } from "lucide-react";
 import { ItemForm } from "@/components/item-form";
 import { PageHeader, Skeleton } from "@/components/ui";
+import { DomainSync } from "@/components/domain";
 import { getCategoryTree, getItem, getLocationTree, getSuggestions } from "@/lib/queries";
 
 export const metadata = { title: "Sửa mặt hàng" };
@@ -20,13 +21,14 @@ export default function EditItemPage(props: PageProps<"/items/[id]/edit">) {
 
 async function EditItem({ params }: { params: PageProps<"/items/[id]/edit">["params"] }) {
   const { id } = await params;
-  const [item, categories, locations, suggestions] = await Promise.all([
-    getItem(Number(id)),
-    getCategoryTree(),
-    getLocationTree(),
-    getSuggestions(),
-  ]);
+  const item = await getItem(Number(id));
   if (!item) notFound();
+  // Danh mục / vị trí / gợi ý theo kho của chính mặt hàng này
+  const [categories, locations, suggestions] = await Promise.all([
+    getCategoryTree(item.domain),
+    getLocationTree(item.domain),
+    getSuggestions(item.domain),
+  ]);
   const { category: _c, location: _l, media: _m, ...plain } = item;
 
   return (
@@ -40,7 +42,14 @@ async function EditItem({ params }: { params: PageProps<"/items/[id]/edit">["par
           </Link>
         }
       />
-      <ItemForm item={plain} categories={categories} locations={locations} suggestions={suggestions} />
+      <DomainSync domain={item.domain} />
+      <ItemForm
+        domain={item.domain}
+        item={plain}
+        categories={categories}
+        locations={locations}
+        suggestions={suggestions}
+      />
     </>
   );
 }

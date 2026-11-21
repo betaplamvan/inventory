@@ -5,46 +5,48 @@ import { useMemo, useState, useTransition, type ReactNode } from "react";
 import { ImagePlus, Loader2, Plus, Trash2, X } from "lucide-react";
 import { createItem, updateItem } from "@/actions/items";
 import type { Item, ItemKind, Spec } from "@/db/schema";
-import { ITEM_KINDS, KIND_LABELS, UNITS } from "@/lib/constants";
+import { KIND_LABELS } from "@/lib/constants";
+import { DOMAIN_CONFIG, type Domain } from "@/lib/domains";
 import { fmtBytes } from "@/lib/format";
 import { ACCEPT_MEDIA, uploadFile } from "@/lib/upload-client";
 
 type Opt = { id: number; path: string };
 
-const SPEC_PRESETS: Partial<Record<ItemKind, string[]>> = {
-  component: ["Giá trị", "Điện áp", "Dòng", "Công suất", "Sai số"],
-  module: ["Điện áp hoạt động", "Giao tiếp", "Kích thước", "Chip chính"],
-  tool: ["Công suất", "Kích thước", "Nguồn"],
-  consumable: ["Đường kính", "Thành phần", "Khối lượng"],
-  equipment: ["Dải đo", "Độ chính xác", "Nguồn"],
-};
-
 type Suggestions = { manufacturers: string[]; packages: string[]; suppliers: string[]; tags: string[] };
 
 export function ItemForm({
+  domain,
   item,
   categories,
   locations,
   suggestions,
+  prefill,
 }: {
+  /** Kho của mặt hàng (thêm mới: kho đang chọn) — quyết định loại, đơn vị, trường hiển thị */
+  domain: Domain;
   item?: Item;
   categories: Opt[];
   locations: Opt[];
   suggestions: Suggestions;
+  /** Điền sẵn khi thêm mới (vd. từ danh sách cần mua) */
+  prefill?: { name?: string; quantity?: string; unit?: string; shoppingId?: string };
 }) {
+  const cfg = DOMAIN_CONFIG[domain];
   const router = useRouter();
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [kind, setKind] = useState<ItemKind>(item?.kind ?? "component");
+  const [kind, setKind] = useState<ItemKind>(item?.kind ?? cfg.defaultKind);
   const [specs, setSpecs] = useState<Spec[]>(item?.specs?.length ? item.specs : [{ key: "", value: "" }]);
   const [files, setFiles] = useState<File[]>([]);
   const [progress, setProgress] = useState<string | null>(null);
 
   const presetKeys = useMemo(
-    () => (SPEC_PRESETS[kind] ?? []).filter((k) => !specs.some((s) => s.key === k)),
-    [kind, specs],
+    () => (cfg.specPresets[kind] ?? []).filter((k) => !specs.some((s) => s.key === k)),
+    [cfg, kind, specs],
   );
+  // Mặt hàng cũ có loại không thuộc danh sách của kho (dữ liệu trước khi chia kho) → vẫn giữ loại đó
+  const kindOptions = cfg.kinds.includes(kind) ? cfg.kinds : [kind, ...cfg.kinds];
 
   const onSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -76,6 +78,8 @@ export function ItemForm({
 
   return (
     <form onSubmit={onSubmit} className="space-y-5">
+      <input type="hidden" name="domain" value={domain} />
+      {prefill?.shoppingId && <input type="hidden" name="shoppingId" value={prefill.shoppingId} />}
       {error && (
         <div className="rounded-lg border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger">{error}</div>
       )}
@@ -84,16 +88,16 @@ export function ItemForm({
         <Field label="Tên mặt hàng *" error={errors.name} className="sm:col-span-2">
           <input
             name="name"
-            defaultValue={item?.name}
+            defaultValue={item?.name ?? prefill?.name}
             required
             autoFocus={!item}
             className="input"
-            placeholder="VD: Điện trở 10kΩ 1/4W, ESP32-WROOM-32, Mỏ hàn T12…"
+            placeholder={cfg.placeholders.name}
           />
         </Field>
-        <Field label="Loại">
+        <Field label="Loại" error={errors.kind}>
           <select name="kind" value={kind} onChange={(e) => setKind(e.target.value as ItemKind)} className="input">
-            {ITEM_KINDS.map((k) => (
+            {kindOptions.map((k) => (
               <option key={k} value={k}>
                 {KIND_LABELS[k]}
               </option>
@@ -115,7 +119,7 @@ export function ItemForm({
             name="sku"
             defaultValue={item?.sku ?? ""}
             className="input font-mono"
-            placeholder="R-10K-0805"
+            placeholder={cfg.placeholders.sku}
             autoCapitalize="characters"
             autoCorrect="off"
             spellCheck={false}
@@ -126,7 +130,7 @@ export function ItemForm({
             name="tags"
             defaultValue={item?.tags.join(", ")}
             className="input"
-            placeholder="smd, arduino, nguồn…"
+            placeholder={cfg.placeholders.tags}
             list="tag-suggestions"
           />
           <datalist id="tag-suggestions">
@@ -140,54 +144,72 @@ export function ItemForm({
         </Field>
       </Section>
 
-      <Section title="Thông số kỹ thuật">
-        <Field label="Hãng sản xuất">
-          <input name="manufacturer" defaultValue={item?.manufacturer ?? ""} className="input" list="mfr-list" />
-          <datalist id="mfr-list">
-            {suggestions.manufacturers.map((t) => (
-              <option key={t} value={t} />
-            ))}
-          </datalist>
-        </Field>
-        <Field label="Mã nhà sản xuất (MPN)">
-          <input
-            name="mpn"
-            defaultValue={item?.mpn ?? ""}
-            className="input font-mono"
-            placeholder="NE555P"
-            autoCapitalize="characters"
-            autoCorrect="off"
-            spellCheck={false}
-          />
-        </Field>
-        <Field label="Package / Kiểu chân">
-          <input
-            name="package"
-            defaultValue={item?.package ?? ""}
-            className="input"
-            placeholder="DIP-8, SOT-23, 0805…"
-            list="pkg-list"
-          />
-          <datalist id="pkg-list">
-            {[...new Set([...suggestions.packages, "DIP-8", "DIP-16", "SOP-8", "SOT-23", "TO-92", "TO-220", "0402", "0603", "0805", "1206", "QFN", "LQFP-48"])].map((t) => (
-              <option key={t} value={t} />
-            ))}
-          </datalist>
-        </Field>
-        <Field label="Link datasheet" error={errors.datasheetUrl}>
-          <input
-            name="datasheetUrl"
-            defaultValue={item?.datasheetUrl ?? ""}
-            className="input"
-            placeholder="https://…"
-            inputMode="url"
-            autoCapitalize="none"
-            autoCorrect="off"
-          />
-        </Field>
+      <Section title={cfg.specsTitle}>
+        {cfg.showExpiry && (
+          <Field label="Hạn sử dụng" error={errors.expiresAt} hint="Báo “sắp hết hạn” trước 3 ngày">
+            <input name="expiresAt" type="date" defaultValue={item?.expiresAt ?? ""} className="input" />
+          </Field>
+        )}
+        {cfg.manufacturerLabel && (
+          <Field label={cfg.manufacturerLabel}>
+            <input name="manufacturer" defaultValue={item?.manufacturer ?? ""} className="input" list="mfr-list" />
+            <datalist id="mfr-list">
+              {suggestions.manufacturers.map((t) => (
+                <option key={t} value={t} />
+              ))}
+            </datalist>
+          </Field>
+        )}
+        {cfg.showMpn && (
+          <Field label="Mã nhà sản xuất (MPN)">
+            <input
+              name="mpn"
+              defaultValue={item?.mpn ?? ""}
+              className="input font-mono"
+              placeholder="NE555P"
+              autoCapitalize="characters"
+              autoCorrect="off"
+              spellCheck={false}
+            />
+          </Field>
+        )}
+        {cfg.showPackage && (
+          <Field label="Package / Kiểu chân">
+            <input
+              name="package"
+              defaultValue={item?.package ?? ""}
+              className="input"
+              placeholder="DIP-8, SOT-23, 0805…"
+              list="pkg-list"
+            />
+            <datalist id="pkg-list">
+              {[
+                ...new Set([
+                  ...suggestions.packages,
+                  ...["DIP-8", "DIP-16", "SOP-8", "SOT-23", "TO-92", "TO-220", "0402", "0603", "0805", "1206", "QFN", "LQFP-48"],
+                ]),
+              ].map((t) => (
+                <option key={t} value={t} />
+              ))}
+            </datalist>
+          </Field>
+        )}
+        {cfg.showDatasheet && (
+          <Field label="Link datasheet" error={errors.datasheetUrl}>
+            <input
+              name="datasheetUrl"
+              defaultValue={item?.datasheetUrl ?? ""}
+              className="input"
+              placeholder="https://…"
+              inputMode="url"
+              autoCapitalize="none"
+              autoCorrect="off"
+            />
+          </Field>
+        )}
 
         <div className="sm:col-span-2">
-          <span className="label">Thông số khác</span>
+          <span className="label">{cfg.showMpn ? "Thông số khác" : "Đặc điểm (màu, size, chất liệu, xuất xứ…)"}</span>
           <div className="space-y-2">
             {specs.map((s, i) => (
               <div key={i} className="flex gap-2">
@@ -248,15 +270,20 @@ export function ItemForm({
         >
           <input
             name="quantity"
-            defaultValue={item?.quantity ?? 0}
+            defaultValue={item?.quantity ?? prefill?.quantity ?? 0}
             inputMode="decimal"
             className="input tabular-nums"
           />
         </Field>
         <Field label="Đơn vị">
-          <input name="unit" defaultValue={item?.unit ?? "cái"} className="input" list="unit-list" />
+          <input
+            name="unit"
+            defaultValue={item?.unit ?? prefill?.unit ?? cfg.defaultUnit}
+            className="input"
+            list="unit-list"
+          />
           <datalist id="unit-list">
-            {UNITS.map((u) => (
+            {cfg.units.map((u) => (
               <option key={u} value={u} />
             ))}
           </datalist>
@@ -286,10 +313,10 @@ export function ItemForm({
             defaultValue={item?.supplier ?? ""}
             className="input"
             list="supplier-list"
-            placeholder="banlinhkien, Hshop, Shopee…"
+            placeholder={cfg.placeholders.supplier}
           />
           <datalist id="supplier-list">
-            {[...new Set([...suggestions.suppliers, "Ban Linh Kiện", "Hshop", "Điện Tử Tương Lai", "Shopee", "LCSC", "AliExpress"])].map((t) => (
+            {[...new Set([...suggestions.suppliers, ...cfg.supplierSuggestions])].map((t) => (
               <option key={t} value={t} />
             ))}
           </datalist>
@@ -315,7 +342,7 @@ export function ItemForm({
           <div className="sm:col-span-2">
             <label className="flex cursor-pointer flex-col items-center gap-2 rounded-xl border-2 border-dashed border-border px-4 py-8 text-center text-sm text-muted transition hover:border-accent hover:text-accent-strong">
               <ImagePlus className="size-8" />
-              <span>Chụp / chọn ảnh, video hoặc datasheet PDF (có thể chọn nhiều)</span>
+              <span>Chụp / chọn ảnh, video hoặc tài liệu PDF (có thể chọn nhiều)</span>
               <input
                 type="file"
                 multiple

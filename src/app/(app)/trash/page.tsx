@@ -7,6 +7,7 @@ import { ConfirmButton } from "@/components/confirm-button";
 import { TrashRowActions } from "@/components/trash-row-actions";
 import { EmptyState, ItemThumb, ListSkeleton, PageHeader } from "@/components/ui";
 import { requireUser } from "@/lib/auth/session";
+import { currentDomain } from "@/lib/domain-server";
 import { fmtDateTime, fmtQty } from "@/lib/format";
 import { TRASH_DAYS, listTrashFor, purgeTrashFor } from "@/lib/inventory/trash";
 
@@ -31,7 +32,7 @@ async function Trash() {
   const me = await requireUser();
   // Dọn món quá hạn sau khi trả trang (không làm chậm lần mở này)
   after(() => purgeTrashFor(me.id, "expired").catch((err) => console.error("[trash] lỗi dọn thùng rác:", err)));
-  const rows = await listTrashFor(me.id);
+  const rows = await listTrashFor(me.id, await currentDomain());
 
   if (!rows.length) {
     return (

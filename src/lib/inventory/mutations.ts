@@ -1,7 +1,7 @@
 import "server-only";
 import { and, eq } from "drizzle-orm";
 import { db, type Tx } from "@/db";
-import { categories, items, locations, stockMovements, type MovementType } from "@/db/schema";
+import { categories, items, locations, stockMovements, type Domain, type MovementType } from "@/db/schema";
 import { currentVia } from "@/lib/auth/actor";
 import { buildSearchText, type ItemInput } from "@/lib/item-input";
 import { alertOnStockChange } from "@/lib/notify";
@@ -32,19 +32,21 @@ export function pgErrorMessage(err: unknown): string {
   return "Có lỗi xảy ra, vui lòng thử lại";
 }
 
-/** Bỏ danh mục / vị trí không thuộc user (chống dùng id của người khác). */
-export async function ownedRefs(userId: string, data: Pick<ItemInput, "categoryId" | "locationId">) {
+/** Bỏ danh mục / vị trí không thuộc user hoặc khác kho (chống dùng id của người khác / kho khác). */
+export async function ownedRefs(userId: string, data: Pick<ItemInput, "categoryId" | "locationId" | "domain">) {
   const [cat] = data.categoryId
     ? await db
         .select({ id: categories.id })
         .from(categories)
-        .where(and(eq(categories.id, data.categoryId), eq(categories.userId, userId)))
+        .where(
+          and(eq(categories.id, data.categoryId), eq(categories.userId, userId), eq(categories.domain, data.domain)),
+        )
     : [];
   const [loc] = data.locationId
     ? await db
         .select({ id: locations.id })
         .from(locations)
-        .where(and(eq(locations.id, data.locationId), eq(locations.userId, userId)))
+        .where(and(eq(locations.id, data.locationId), eq(locations.userId, userId), eq(locations.domain, data.domain)))
     : [];
   return { categoryId: cat?.id ?? null, locationId: loc?.id ?? null };
 }
@@ -73,7 +75,14 @@ export async function createItemFor(userId: string, input: ItemInput) {
 
 /** Cập nhật toàn bộ thông tin; nếu số lượng đổi thì ghi một lần kiểm kê. */
 export async function updateItemFor(userId: string, id: number, input: ItemInput, adjustNote = "Sửa trực tiếp trong form") {
-  const data = { ...input, ...(await ownedRefs(userId, input)) };
+  // Mặt hàng giữ nguyên kho của nó (không chuyển kho khi sửa)
+  const [existing] = await db
+    .select({ domain: items.domain })
+    .from(items)
+    .where(and(eq(items.id, id), liveItemOf(userId)));
+  if (!existing) throw new InventoryError("Không tìm thấy mặt hàng");
+  const scoped = { ...input, domain: existing.domain };
+  const data = { ...scoped, ...(await ownedRefs(userId, scoped)) };
   const before = await db.transaction(async (tx) => {
     const [current] = await tx
       .select({ quantity: items.quantity, minQuantity: items.minQuantity })
@@ -163,10 +172,19 @@ export async function recordMovementFor(
 
 type TaxTable = typeof categories | typeof locations;
 
-/** Kiểm tra mục cha thuộc user và không tạo vòng lặp cha-con. Trả về thông báo lỗi hoặc null. */
-export async function parentProblem(table: TaxTable, userId: string, id: number | null, parentId: number | null) {
+/** Kiểm tra mục cha thuộc user, cùng kho và không tạo vòng lặp cha-con. Trả về thông báo lỗi hoặc null. */
+export async function parentProblem(
+  table: TaxTable,
+  userId: string,
+  id: number | null,
+  parentId: number | null,
+  domain: Domain,
+) {
   if (parentId == null) return null;
-  const rows = await db.select({ id: table.id, parentId: table.parentId }).from(table).where(eq(table.userId, userId));
+  const rows = await db
+    .select({ id: table.id, parentId: table.parentId })
+    .from(table)
+    .where(and(eq(table.userId, userId), eq(table.domain, domain)));
   const parentOf = new Map(rows.map((r) => [r.id, r.parentId]));
   if (!parentOf.has(parentId)) return "Mục cha không hợp lệ";
   if (id == null) return null;
@@ -181,26 +199,40 @@ export async function parentProblem(table: TaxTable, userId: string, id: number 
 
 export async function createCategoryFor(
   userId: string,
-  data: { name: string; parentId?: number | null; description?: string | null; sortOrder?: number },
+  data: { domain: Domain; name: string; parentId?: number | null; description?: string | null; sortOrder?: number },
 ) {
-  const problem = await parentProblem(categories, userId, null, data.parentId ?? null);
+  const problem = await parentProblem(categories, userId, null, data.parentId ?? null, data.domain);
   if (problem) throw new InventoryError(problem);
   const [row] = await db
     .insert(categories)
-    .values({ userId, name: data.name, parentId: data.parentId ?? null, description: data.description ?? null, sortOrder: data.sortOrder ?? 0 })
+    .values({
+      userId,
+      domain: data.domain,
+      name: data.name,
+      parentId: data.parentId ?? null,
+      description: data.description ?? null,
+      sortOrder: data.sortOrder ?? 0,
+    })
     .returning({ id: categories.id });
   return row.id;
 }
 
 export async function createLocationFor(
   userId: string,
-  data: { name: string; parentId?: number | null; description?: string | null; code?: string | null },
+  data: { domain: Domain; name: string; parentId?: number | null; description?: string | null; code?: string | null },
 ) {
-  const problem = await parentProblem(locations, userId, null, data.parentId ?? null);
+  const problem = await parentProblem(locations, userId, null, data.parentId ?? null, data.domain);
   if (problem) throw new InventoryError(problem);
   const [row] = await db
     .insert(locations)
-    .values({ userId, name: data.name, parentId: data.parentId ?? null, description: data.description ?? null, code: data.code ?? null })
+    .values({
+      userId,
+      domain: data.domain,
+      name: data.name,
+      parentId: data.parentId ?? null,
+      description: data.description ?? null,
+      code: data.code ?? null,
+    })
     .returning({ id: locations.id });
   return row.id;
 }

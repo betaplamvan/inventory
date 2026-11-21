@@ -10,6 +10,7 @@ import { buildSearchText, fieldErrors, itemFromFormData, parseNum } from "@/lib/
 import { InventoryError, createItemFor, pgErrorMessage, recordMovementFor, updateItemFor } from "@/lib/inventory/mutations";
 import { liveItemOf } from "@/lib/inventory/scope";
 import { trashItemFor } from "@/lib/inventory/trash";
+import { linkShoppingToItemFor } from "@/lib/inventory/shopping";
 import { removeObjects } from "@/lib/storage";
 
 export type ActionResult =
@@ -30,6 +31,11 @@ export async function createItem(formData: FormData): Promise<ActionResult> {
   }
   try {
     const id = await createItemFor(me.id, parsed.data);
+    // Thêm từ danh sách cần mua ("đã mua → thêm vào kho"): gắn món đó với mặt hàng mới và đánh dấu đã mua
+    const shoppingId = Number(formData.get("shoppingId"));
+    if (Number.isInteger(shoppingId) && shoppingId > 0) {
+      await linkShoppingToItemFor(me.id, shoppingId, id).catch(() => {});
+    }
     revalidateAll();
     return { ok: true, id };
   } catch (err) {

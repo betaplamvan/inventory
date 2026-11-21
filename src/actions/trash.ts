@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth/session";
+import { currentDomain } from "@/lib/domain-server";
 import { pgErrorMessage } from "@/lib/inventory/mutations";
 import { purgeTrashFor, restoreItemFor } from "@/lib/inventory/trash";
 
@@ -34,6 +35,7 @@ export async function purgeItem(id: number) {
 
 export async function emptyTrash() {
   const me = await requireUser();
-  await purgeTrashFor(me.id, "all");
+  // "Dọn sạch" trên trang Thùng rác: chỉ thùng rác của kho đang chọn
+  await purgeTrashFor(me.id, "all", await currentDomain());
   revalidatePath("/", "layout");
 }

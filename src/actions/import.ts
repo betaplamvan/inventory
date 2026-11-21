@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { runAsUser } from "@/lib/auth/actor";
 import { requireUser } from "@/lib/auth/session";
+import { currentDomain } from "@/lib/domain-server";
 import { csvToRows, importRows, type CsvColumn, type ImportResult } from "@/lib/inventory/import";
 import { pgErrorMessage } from "@/lib/inventory/mutations";
 
@@ -28,12 +29,14 @@ export async function importCsv(
   const { rows, columns, error } = csvToRows(text);
   if (error) return { ok: false, error, columns };
 
+  const domain = await currentDomain();
   try {
     // runAsUser: ghi nguồn "import" vào lịch sử nhập/xuất của các dòng có đổi số lượng
     const result = await runAsUser(
       me.id,
       () =>
         importRows(me.id, rows, {
+          domain,
           onExisting: opts.onExisting === "skip" ? "skip" : "update",
           createMissing: !!opts.createMissing,
           dryRun: !opts.commit,

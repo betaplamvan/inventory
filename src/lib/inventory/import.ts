@@ -1,7 +1,8 @@
 import "server-only";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { items, type Spec } from "@/db/schema";
+import { items, type Domain, type Spec } from "@/db/schema";
+import { DOMAIN_CONFIG } from "@/lib/domains";
 import { ITEM_KINDS, KIND_LABELS } from "@/lib/constants";
 import { parseCsv } from "@/lib/csv";
 import { fmtQty, normalizeText } from "@/lib/format";
@@ -42,11 +43,15 @@ export type ImportRow = {
   purchaseUrl?: string | null;
   datasheetUrl?: string | null;
   notes?: string | null;
+  /** Hạn sử dụng YYYY-MM-DD (thực phẩm) */
+  expiresAt?: string | null;
   /** Lỗi phát hiện khi đọc ô (số sai, loại không hợp lệ…) */
   errors?: string[];
 };
 
 export type ImportOptions = {
+  /** Kho nhận dữ liệu: mặt hàng mới thuộc kho này, danh mục / vị trí tra trong kho này */
+  domain: Domain;
   /** Dòng khớp mặt hàng đang có (theo ID hoặc SKU): cập nhật hay bỏ qua */
   onExisting: "update" | "skip";
   /** Tự tạo danh mục / vị trí chưa có */
@@ -84,6 +89,11 @@ type Field = Exclude<keyof ImportRow, "line" | "errors">;
 /** Tên cột (đã bỏ dấu, chữ thường, bỏ ký tự đặc biệt) → trường. Khớp với tiêu đề của file xuất CSV. */
 const HEADER_ALIASES: Record<string, Field | "ignore"> = {
   id: "id",
+  "han su dung": "expiresAt",
+  hsd: "expiresAt",
+  "het han": "expiresAt",
+  expiry: "expiresAt",
+  "expiry date": "expiresAt",
   ten: "name",
   "ten mat hang": "name",
   "ten hang": "name",
@@ -160,8 +170,18 @@ const normalizeHeader = (h: string) =>
 export const CSV_HEADER = [
   "ID", "Tên", "SKU", "Loại", "Danh mục", "Vị trí", "Hãng", "Mã nhà SX (MPN)", "Package",
   "Số lượng", "Đơn vị", "Tối thiểu", "Đơn giá", "Giá trị", "Nhà cung cấp", "Link mua",
-  "Datasheet", "Tags", "Thông số", "Mô tả", "Ghi chú",
+  "Datasheet", "Tags", "Thông số", "Mô tả", "Ghi chú", "Hạn sử dụng",
 ];
+
+/** "24/11/2026" | "2026-11-24" | "24-11-2026" → "2026-11-24"; sai định dạng → null */
+export function parseDateCell(raw: string): string | null {
+  const s = raw.trim();
+  let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if (m) return `${m[1]}-${m[2].padStart(2, "0")}-${m[3].padStart(2, "0")}`;
+  m = s.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$/);
+  if (m) return `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`;
+  return null;
+}
 
 const kindByLabel = new Map<string, string>([
   ...ITEM_KINDS.map((k) => [normalizeText(k), k] as [string, string]),
@@ -238,6 +258,12 @@ export function csvToRows(text: string): { rows: ImportRow[]; columns: CsvColumn
         case "specs":
           row.specs = parseSpecs(raw);
           break;
+        case "expiresAt": {
+          const d = parseDateCell(raw);
+          if (d) row.expiresAt = d;
+          else errors.push(`Hạn sử dụng không hợp lệ: "${raw}" (dùng dd/mm/yyyy)`);
+          break;
+        }
         case "tags":
           row.tags = [...new Set(raw.split(/[,;\n]/).map((t) => t.trim()).filter(Boolean))];
           break;
@@ -271,7 +297,7 @@ export async function importRows(userId: string, rows: ImportRow[], opts: Import
     let hit = refCache.get(key);
     if (!hit) {
       try {
-        hit = { id: await resolveRef(kind, value, userId, opts.createMissing && !opts.dryRun) };
+        hit = { id: await resolveRef(kind, value, userId, opts.createMissing && !opts.dryRun, opts.domain) };
       } catch (err) {
         if (!(err instanceof RefNotFoundError)) throw err;
         const label = kind === "category" ? "danh mục" : "vị trí";
@@ -304,6 +330,11 @@ export async function importRows(userId: string, rows: ImportRow[], opts: Import
       } else if (row.sku) {
         [target] = await db.select().from(items).where(and(eq(items.sku, row.sku), liveItemOf(userId)));
       }
+      if (target && target.domain !== opts.domain) {
+        throw new InventoryError(
+          `${row.id != null ? `ID=${row.id}` : `SKU "${row.sku}"`} thuộc ${DOMAIN_CONFIG[target.domain].space}, không phải ${DOMAIN_CONFIG[opts.domain].space}`,
+        );
+      }
 
       const dupLine = !target && row.sku ? seenSku.get(row.sku) : undefined;
       if (row.sku && !seenSku.has(row.sku)) seenSku.set(row.sku, row.line);
@@ -322,10 +353,12 @@ export async function importRows(userId: string, rows: ImportRow[], opts: Import
       const [category, location] = [await resolve("category", row.category), await resolve("location", row.location)];
       for (const r of [category, location]) if (r?.willCreate) res.messages.push(r.willCreate);
 
+      const cfg = DOMAIN_CONFIG[opts.domain];
       const parsed = itemSchema.safeParse({
+        domain: opts.domain,
         name: (row.name ?? target?.name ?? row.mpn ?? "").trim(),
         sku: pick(row.sku, target?.sku ?? null) || null,
-        kind: row.kind ?? target?.kind ?? "component",
+        kind: row.kind ?? target?.kind ?? cfg.defaultKind,
         categoryId: category ? category.id : (target?.categoryId ?? null),
         locationId: location ? location.id : (target?.locationId ?? null),
         manufacturer: pick(row.manufacturer, target?.manufacturer ?? null),
@@ -334,7 +367,7 @@ export async function importRows(userId: string, rows: ImportRow[], opts: Import
         description: pick(row.description, target?.description ?? null),
         specs: row.specs ?? target?.specs ?? [],
         tags: row.tags ?? target?.tags ?? [],
-        unit: row.unit ?? target?.unit ?? "cái",
+        unit: row.unit ?? target?.unit ?? cfg.defaultUnit,
         quantity: row.quantity ?? target?.quantity ?? 0,
         minQuantity: row.minQuantity ?? target?.minQuantity ?? 0,
         unitPrice: pick(row.unitPrice, target?.unitPrice ?? null),
@@ -342,6 +375,7 @@ export async function importRows(userId: string, rows: ImportRow[], opts: Import
         purchaseUrl: pick(row.purchaseUrl, target?.purchaseUrl ?? null),
         datasheetUrl: pick(row.datasheetUrl, target?.datasheetUrl ?? null),
         notes: pick(row.notes, target?.notes ?? null),
+        expiresAt: pick(row.expiresAt, target?.expiresAt ?? null),
       });
       if (!parsed.success) {
         res.messages.push(...new Set(parsed.error.issues.map((i) => i.message)));

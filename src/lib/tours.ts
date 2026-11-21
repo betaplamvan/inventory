@@ -25,8 +25,13 @@ export type TourId =
 export const TOURS: Record<TourId, TourStep[]> = {
   home: [
     {
-      title: "Chào mừng đến Kho linh kiện",
+      title: "Chào mừng đến Kho đồ",
       body: "Vài bước ngắn để làm quen. Mỗi trang có hướng dẫn riêng khi mở lần đầu; bấm nút ? cạnh tiêu đề để xem lại.",
+    },
+    {
+      target: "domain-switch",
+      title: "Ba kho trong một app",
+      body: "Chuyển giữa Kho linh kiện, Tủ quần áo và Tủ bếp ở đây. Mỗi kho có danh mục, vị trí, màu giao diện và trợ lý riêng (gợi ý mạch DIY, phối đồ, món ăn từ đồ đang có).",
     },
     {
       target: "home-empty",
@@ -45,8 +50,8 @@ export const TOURS: Record<TourId, TourStep[]> = {
     },
     {
       target: "nav-add",
-      title: "Thêm mặt hàng",
-      body: "Nút này luôn ở đây. Chỉ cần nhập tên, các thông tin khác bổ sung sau cũng được.",
+      title: "Thêm mới",
+      body: "Nút này luôn ở đây, thêm vào kho đang chọn. Chỉ cần nhập tên, các thông tin khác bổ sung sau cũng được.",
     },
     {
       target: "nav-scan",
@@ -56,7 +61,7 @@ export const TOURS: Record<TourId, TourStep[]> = {
     {
       target: "nav",
       title: "Các trang khác",
-      body: "Danh mục, Vị trí cất, Nhập từ file, Thùng rác và Tài khoản nằm ở đây.",
+      body: "Trợ lý, Cần mua, Danh mục, Vị trí cất, Nhập từ file, Thùng rác và Tài khoản nằm ở đây.",
     },
   ],
   items: [

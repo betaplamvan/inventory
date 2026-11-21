@@ -4,7 +4,8 @@ import Form from "next/form";
 import { useRef, useState } from "react";
 import { LayoutGrid, List, Search, SlidersHorizontal, X } from "lucide-react";
 import Link from "next/link";
-import { ITEM_KINDS, KIND_LABELS } from "@/lib/constants";
+import type { ItemKind } from "@/db/schema";
+import { KIND_LABELS } from "@/lib/constants";
 
 type Opt = { id: number; path: string; depth: number };
 
@@ -33,10 +34,16 @@ export function ItemsFilters({
   values,
   categories,
   locations,
+  kinds,
+  withExpiry = false,
 }: {
   values: FilterValues;
   categories: Opt[];
   locations: Opt[];
+  /** Các loại của kho đang chọn */
+  kinds: ItemKind[];
+  /** Kho có hạn sử dụng (thực phẩm) → thêm lọc / sắp xếp theo hạn */
+  withExpiry?: boolean;
 }) {
   const formRef = useRef<HTMLFormElement>(null);
   const submit = () => formRef.current?.requestSubmit();
@@ -56,7 +63,7 @@ export function ItemsFilters({
             name="q"
             defaultValue={values.q}
             key={values.q ?? ""}
-            placeholder="Tìm tên, mã, MPN, tag…"
+            placeholder="Tìm tên, mã, tag, thông số…"
             title="Tìm theo tên, mã, MPN, package, tag… (gõ không dấu cũng được)"
             className="input pl-9"
             type="search"
@@ -85,7 +92,7 @@ export function ItemsFilters({
       <div className={`grid-cols-2 gap-2 md:grid md:grid-cols-5 ${open ? "grid" : "hidden"}`}>
         <select name="kind" defaultValue={values.kind ?? ""} onChange={submit} className="input" key={`k${values.kind}`}>
           <option value="">Tất cả loại</option>
-          {ITEM_KINDS.map((k) => (
+          {kinds.map((k) => (
             <option key={k} value={k}>
               {KIND_LABELS[k]}
             </option>
@@ -126,6 +133,8 @@ export function ItemsFilters({
           <option value="in">Còn hàng</option>
           <option value="low">Cần mua thêm</option>
           <option value="out">Hết hàng</option>
+          {withExpiry && <option value="expiring">Sắp hết hạn</option>}
+          {withExpiry && <option value="expired">Đã hết hạn</option>}
         </select>
         <select
           name="sort"
@@ -139,6 +148,7 @@ export function ItemsFilters({
           <option value="name">Tên A → Z</option>
           <option value="qty">Số lượng ít nhất</option>
           <option value="value">Giá trị cao nhất</option>
+          {withExpiry && <option value="expiry">Hạn dùng gần nhất</option>}
         </select>
       </div>
       <div className={`items-center justify-between md:flex ${hasFilter ? "flex" : "hidden"}`}>

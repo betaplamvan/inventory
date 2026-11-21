@@ -1,7 +1,7 @@
 import "server-only";
 import { and, desc, eq, inArray, isNotNull, lt, ne, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { items, media } from "@/db/schema";
+import { items, media, type Domain } from "@/db/schema";
 import { viaLabel } from "@/lib/auth/actor";
 import { removeObjects } from "@/lib/storage";
 import { InventoryError } from "./mutations";
@@ -54,11 +54,21 @@ export async function restoreItemFor(userId: string, id: number) {
   });
 }
 
-export async function listTrashFor(userId: string) {
+/** Món trong thùng rác; domain bỏ trống = mọi kho */
+export async function listTrashFor(userId: string, domain?: Domain) {
   return db.query.items.findMany({
-    where: trashedOf(userId),
+    where: domain ? and(trashedOf(userId), eq(items.domain, domain)) : trashedOf(userId),
     orderBy: [desc(items.deletedAt)],
-    columns: { id: true, name: true, sku: true, quantity: true, unit: true, deletedAt: true, deletedBy: true },
+    columns: {
+      id: true,
+      domain: true,
+      name: true,
+      sku: true,
+      quantity: true,
+      unit: true,
+      deletedAt: true,
+      deletedBy: true,
+    },
     with: { cover: true },
   });
 }
@@ -67,10 +77,12 @@ export async function listTrashFor(userId: string) {
  * Xoá hẳn (cả ảnh/video trên MinIO và lịch sử): một danh sách id, tất cả, hoặc những món đã quá hạn.
  * Chỉ đụng tới món đang nằm trong thùng rác. Trả về số mặt hàng đã xoá.
  */
-export async function purgeTrashFor(userId: string, which: number[] | "all" | "expired") {
+export async function purgeTrashFor(userId: string, which: number[] | "all" | "expired", domain?: Domain) {
   const cond =
     which === "all"
-      ? trashedOf(userId)
+      ? domain
+        ? and(trashedOf(userId), eq(items.domain, domain))
+        : trashedOf(userId)
       : which === "expired"
         ? and(trashedOf(userId), lt(items.deletedAt, sql`now() - ${`${TRASH_DAYS} days`}::interval`))
         : which.length

@@ -107,7 +107,7 @@ async function doPoll() {
     await sendTelegram(
       chatId,
       linked
-        ? "✅ Đã kết nối với <b>Kho linh kiện</b>. Bạn sẽ nhận cảnh báo khi mặt hàng sắp hết."
+        ? "✅ Đã kết nối với <b>Kho đồ</b>. Bạn sẽ nhận cảnh báo khi mặt hàng sắp hết."
         : "Mã kết nối sai hoặc đã hết hạn. Hãy bấm lại <b>Kết nối Telegram</b> trong trang Tài khoản của app.",
     ).catch((err) => console.error("[notify] không trả lời được trên Telegram:", (err as Error).message));
   }

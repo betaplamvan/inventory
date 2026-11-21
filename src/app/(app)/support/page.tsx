@@ -23,7 +23,7 @@ export default function SupportPage() {
             </span>
             <div className="min-w-0 space-y-1.5 text-sm">
               <p>
-                Kho linh kiện là dự án <b>mã nguồn mở, miễn phí</b>
+                Kho đồ là dự án <b>mã nguồn mở, miễn phí</b>
                 {by}. Nếu app có ích cho bạn, dù bạn dùng bản này hay tự deploy, có thể mời tác giả một ly cà phê để
                 tiếp tục làm thêm tính năng.
               </p>

@@ -14,8 +14,10 @@ import {
   Menu,
   Plus,
   ScanLine,
+  ShoppingCart,
   Trash2,
 } from "lucide-react";
+import { DomainSwitcher } from "./domain";
 import { Logo } from "./logo";
 
 const LINKS = [
@@ -23,6 +25,7 @@ const LINKS = [
   { href: "/items", label: "Kho hàng", icon: Boxes },
   { href: "/movements", label: "Nhập / Xuất", icon: ArrowLeftRight },
   { href: "/chat", label: "Trợ lý", icon: Bot },
+  { href: "/shopping", label: "Cần mua", icon: ShoppingCart },
   { href: "/scan", label: "Quét mã", icon: ScanLine },
   { href: "/categories", label: "Danh mục", icon: FolderTree },
   { href: "/locations", label: "Vị trí cất", icon: MapPin },
@@ -34,7 +37,7 @@ function Brand() {
   return (
     <Link href="/" className="flex items-center gap-2 font-semibold tracking-tight">
       <Logo className="size-8" />
-      <span className="font-bold">Kho linh kiện</span>
+      <span className="font-bold">Kho đồ</span>
     </Link>
   );
 }
@@ -86,8 +89,9 @@ export function AppNav({ lowStockBadge, userMenu }: { lowStockBadge: ReactNode; 
   return (
     <div className="flex h-full flex-col gap-6 p-4">
       <Brand />
+      <DomainSwitcher />
       <Link href="/items/new" className="btn-primary" data-tour="nav-add">
-        <Plus className="size-4" /> Thêm mặt hàng
+        <Plus className="size-4" /> Thêm mới
       </Link>
       <NavLinks lowStockBadge={lowStockBadge} />
       <div className="mt-auto">{userMenu}</div>
@@ -102,8 +106,11 @@ export function MobileNav(props: MobileNavProps) {
   return (
     <>
       <header className="border-b border-border bg-surface pt-[env(safe-area-inset-top)] lg:hidden print:hidden">
-        <div className="flex h-12 items-center justify-between pr-1.5 pl-4">
+        <div className="flex h-12 items-center justify-between gap-2 pr-1.5 pl-4">
           <Brand />
+          <span className="ml-auto">
+            <DomainSwitcher compact />
+          </span>
           <Link
             href="/scan"
             data-tour="nav-scan"
@@ -210,7 +217,7 @@ function TabBar({ lowStockBadge, userMenu, pathname }: MobileNavProps & { pathna
         <div className="mx-auto grid h-15 max-w-xl grid-cols-5">
           {tab(HOME)}
           {tab(ITEMS, lowStockBadge)}
-          <Link href="/items/new" onClick={close} aria-label="Thêm mặt hàng" data-tour="nav-add" className="grid place-items-center">
+          <Link href="/items/new" onClick={close} aria-label="Thêm mới" data-tour="nav-add" className="grid place-items-center">
             <span className="grid size-11 place-items-center rounded-full bg-accent text-on-accent shadow-md transition active:scale-90">
               <Plus className="size-5.5" />
             </span>

@@ -3,7 +3,8 @@ import type { ReactNode } from "react";
 import { ArrowDownLeft, ArrowUpRight, Film, FileText, Package, RefreshCw } from "lucide-react";
 import type { ItemKind, Media } from "@/db/schema";
 import { KIND_COLORS, KIND_LABELS } from "@/lib/constants";
-import { fmtQty } from "@/lib/format";
+import { EXPIRING_DAYS } from "@/lib/domains";
+import { fmtDate, fmtQty } from "@/lib/format";
 import { stockState } from "@/lib/stock";
 import type { TourId } from "@/lib/tours";
 import { Tour, TourButton } from "./tour";
@@ -35,6 +36,28 @@ export function PageHeader({
       </div>
       {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
     </div>
+  );
+}
+
+/** Hạn sử dụng: đỏ = đã quá hạn, cam = sắp hết hạn (≤ EXPIRING_DAYS ngày), xám = còn lâu. days tính sẵn trong SQL. */
+export function ExpiryBadge({ date, days }: { date: string | null; days: number | null | undefined }) {
+  if (!date || days == null) return null;
+  const tone =
+    days < 0
+      ? "bg-danger/10 text-danger"
+      : days <= EXPIRING_DAYS
+        ? "bg-warning/10 text-warning"
+        : "bg-surface-2 text-muted";
+  const text =
+    days < 0
+      ? `Hết hạn ${fmtDate(date, { short: true })}`
+      : days === 0
+        ? "Hết hạn hôm nay"
+        : days <= EXPIRING_DAYS
+          ? `Còn ${days} ngày · ${fmtDate(date, { short: true })}`
+          : `HSD ${fmtDate(date)}`;
+  return (
+    <span className={`inline-flex rounded-md px-1.5 py-0.5 text-[11px] font-medium whitespace-nowrap ${tone}`}>{text}</span>
   );
 }
 

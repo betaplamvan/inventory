@@ -5,6 +5,8 @@ import { SubmitButton } from "@/components/confirm-button";
 import { TaxonomyManager } from "@/components/taxonomy-manager";
 import { ListSkeleton, PageHeader } from "@/components/ui";
 import { getCategoryTree } from "@/lib/queries";
+import { currentDomain } from "@/lib/domain-server";
+import { DOMAIN_CONFIG } from "@/lib/domains";
 
 export const metadata = { title: "Danh mục" };
 
@@ -13,7 +15,7 @@ export default function CategoriesPage() {
     <div className="mx-auto max-w-3xl">
       <PageHeader
         title="Danh mục"
-        description="Phân loại linh kiện theo nhóm, có thể lồng nhiều cấp (VD: Tụ điện › Tụ gốm)"
+        description="Phân nhóm đồ trong kho đang chọn, có thể lồng nhiều cấp (VD: Tụ điện › Tụ gốm, Áo › Sơ mi)"
         tour="categories"
       />
       <Suspense fallback={<ListSkeleton />}>
@@ -24,13 +26,20 @@ export default function CategoriesPage() {
 }
 
 async function Categories() {
-  const nodes = await getCategoryTree();
+  const domain = await currentDomain();
+  const cfg = DOMAIN_CONFIG[domain];
+  const nodes = await getCategoryTree(domain);
   return (
     <>
       {nodes.length === 0 && (
         <form action={seedDefaultCategories} className="card mb-4 flex flex-wrap items-center justify-between gap-3 p-4" data-tour="cat-seed">
           <p className="text-sm text-muted">
-            Chưa có danh mục nào. Tạo nhanh bộ danh mục điện tử phổ biến (điện trở, tụ, IC, module, dụng cụ…)?
+            {cfg.space} chưa có danh mục nào. Tạo nhanh bộ danh mục phổ biến (
+            {cfg.categoryPresets
+              .slice(0, 4)
+              .map(([n]) => n.toLowerCase())
+              .join(", ")}
+            …)?
           </p>
           <SubmitButton className="btn-secondary">
             <Sparkles className="size-4" /> Tạo danh mục mẫu

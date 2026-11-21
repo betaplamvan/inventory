@@ -4,6 +4,7 @@ import { Bot } from "lucide-react";
 import { ChatApp } from "@/components/chat/chat-app";
 import { Skeleton } from "@/components/ui";
 import { llmConfigured } from "@/lib/chat/llm";
+import { currentDomain } from "@/lib/domain-server";
 
 export const metadata = { title: "Trợ lý" };
 
@@ -33,5 +34,7 @@ async function Chat({ searchParams }: { searchParams: PageProps<"/chat">["search
   }
   const sp = await searchParams;
   const c = typeof sp.c === "string" && /^[0-9a-f-]{36}$/i.test(sp.c) ? sp.c : null;
-  return <ChatApp initialId={c} />;
+  const domain = await currentDomain();
+  // key: đổi kho → danh sách cuộc trò chuyện và khung chat của kho mới
+  return <ChatApp key={domain} initialId={c} domain={domain} />;
 }

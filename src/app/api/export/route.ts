@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { getCategoryTree, getLocationTree, listAllItems, type StockFilter } from "@/lib/queries";
 import { getCurrentUser } from "@/lib/auth/session";
+import { currentDomain } from "@/lib/domain-server";
 import { KIND_LABELS } from "@/lib/constants";
 import { toCsv } from "@/lib/csv";
 import { CSV_HEADER } from "@/lib/inventory/import";
@@ -57,16 +58,18 @@ export async function GET(req: NextRequest) {
     );
   }
 
+  const domain = await currentDomain();
   const [rows, categories, locations] = await Promise.all([
     listAllItems({
+      domain,
       q: sp.get("q") || undefined,
       categoryId: Number(sp.get("category")) || undefined,
       locationId: Number(sp.get("location")) || undefined,
       kind: (sp.get("kind") as ItemKind) || undefined,
       stock: (sp.get("stock") as StockFilter) || undefined,
     }),
-    getCategoryTree(),
-    getLocationTree(),
+    getCategoryTree(domain),
+    getLocationTree(domain),
   ]);
   // Đường dẫn đầy đủ ("Tủ A > Ngăn 3") để nhập lại khớp đúng mục con khi có tên trùng
   const pathOf = (tree: { id: number; path: string }[], id: number | null) =>
@@ -77,7 +80,7 @@ export async function GET(req: NextRequest) {
     r.manufacturer, r.mpn, r.package, r.quantity, r.unit, r.minQuantity, r.unitPrice,
     r.unitPrice != null ? r.unitPrice * r.quantity : "", r.supplier, r.purchaseUrl,
     r.datasheetUrl, r.tags.join(", "), r.specs.map((s) => `${s.key}: ${s.value}`).join("; "),
-    r.description, r.notes,
+    r.description, r.notes, r.expiresAt ?? "",
   ]);
 
   const date = new Date().toISOString().slice(0, 10);

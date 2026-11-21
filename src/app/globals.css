@@ -58,6 +58,77 @@
   }
 }
 
+/*
+ * Mỗi kho một màu nhãn (mẫu A "Nhãn dán" — xem artifact giao diện). Kho điện tử dùng bộ màu gốc ở trên.
+ * html[data-domain] được đặt bởi script trong app/layout.tsx trước khi vẽ trang (không nháy màu).
+ */
+html[data-domain="wardrobe"] {
+  --background: #faf6f7;
+  --surface: #ffffff;
+  --surface-2: #f4ecef;
+  --border: #ecdfe4;
+  --foreground: #1f1a1c;
+  --muted: #6a5f63;
+  --accent: #bb3f73;
+  --accent-hover: #a6345f;
+  --accent-strong: #8e2654;
+  --accent-soft: #fbe4ee;
+  --on-accent: #ffffff;
+  --logo-bg: #1f1a1c;
+  --logo-fg: #ffffff;
+  --logo-accent: #f08bb3;
+}
+html[data-domain="pantry"] {
+  --background: #f7f9f3;
+  --surface: #ffffff;
+  --surface-2: #edf2e6;
+  --border: #dce5d2;
+  --foreground: #18201a;
+  --muted: #5d665b;
+  --accent: #2f8a3f;
+  --accent-hover: #287836;
+  --accent-strong: #1f6a2c;
+  --accent-soft: #e2f3df;
+  --on-accent: #ffffff;
+  --logo-bg: #18201a;
+  --logo-fg: #ffffff;
+  --logo-accent: #7fd08b;
+}
+@media (prefers-color-scheme: dark) {
+  html[data-domain="wardrobe"] {
+    --background: #141113;
+    --surface: #1d191b;
+    --surface-2: #282225;
+    --border: #362e32;
+    --foreground: #efe8eb;
+    --muted: #a99da2;
+    --accent: #f07aa8;
+    --accent-hover: #f596bb;
+    --accent-strong: #f7a6c6;
+    --accent-soft: #3d1b2b;
+    --on-accent: #1f1a1c;
+    --logo-bg: #f07aa8;
+    --logo-fg: #1f1a1c;
+    --logo-accent: #1f1a1c;
+  }
+  html[data-domain="pantry"] {
+    --background: #111511;
+    --surface: #191e19;
+    --surface-2: #232a22;
+    --border: #2f382e;
+    --foreground: #e7efe5;
+    --muted: #9aa797;
+    --accent: #6cc97a;
+    --accent-hover: #86d692;
+    --accent-strong: #8fdc9a;
+    --accent-soft: #1c3520;
+    --on-accent: #111511;
+    --logo-bg: #6cc97a;
+    --logo-fg: #111511;
+    --logo-accent: #111511;
+  }
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-surface: var(--surface);
