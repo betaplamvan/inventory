@@ -1,5 +1,5 @@
 import "server-only";
-import { and, asc, desc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, lte, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   chatConversations,
@@ -49,17 +49,41 @@ export async function deleteConversation(userId: string, id: string) {
   await db.delete(chatConversations).where(and(eq(chatConversations.id, id), eq(chatConversations.userId, userId)));
 }
 
-async function loadMessages(conversationId: string) {
+async function loadMessages(conversationId: string, upToId?: number) {
   return db
     .select()
     .from(chatMessages)
-    .where(eq(chatMessages.conversationId, conversationId))
+    .where(
+      upToId === undefined
+        ? eq(chatMessages.conversationId, conversationId)
+        : and(eq(chatMessages.conversationId, conversationId), lte(chatMessages.id, upToId)),
+    )
     .orderBy(asc(chatMessages.id));
 }
 
-/** Dựng lại tin nhắn cho giao diện: gộp các bước liên tiếp của trợ lý thành 1 bong bóng */
-export async function conversationForUi(userId: string, conversationId: string): Promise<UiMessage[]> {
-  const [rows, meta] = await Promise.all([loadMessages(conversationId), toolCatalog()]);
+/** id tin nhắn lớn nhất hiện có (0 nếu chưa có) — mốc "trạng thái nền" của một lượt chạy */
+export async function lastMessageId(conversationId: string) {
+  const [r] = await db
+    .select({ id: sql<number | null>`max(${chatMessages.id})` })
+    .from(chatMessages)
+    .where(eq(chatMessages.conversationId, conversationId));
+  return Number(r?.id ?? 0);
+}
+
+export async function createConversation(userId: string, firstMessage: string) {
+  const [conv] = await db
+    .insert(chatConversations)
+    .values({ userId, title: titleFrom(firstMessage) })
+    .returning();
+  return conv;
+}
+
+/**
+ * Dựng lại tin nhắn cho giao diện: gộp các bước liên tiếp của trợ lý thành 1 bong bóng.
+ * upToId: chỉ lấy tới tin nhắn này — trạng thái trước khi lượt đang chạy bắt đầu (lib/chat/runs.ts).
+ */
+export async function conversationForUi(userId: string, conversationId: string, upToId?: number): Promise<UiMessage[]> {
+  const [rows, meta] = await Promise.all([loadMessages(conversationId, upToId), toolCatalog()]);
   const results = new Map(rows.filter((r) => r.role === "tool").map((r) => [r.toolCallId, r]));
   const lastAssistant = rows.findLast((r) => r.role === "assistant");
   const out: UiMessage[] = [];
@@ -221,36 +245,19 @@ async function saveRow(values: typeof chatMessages.$inferInsert) {
 }
 
 /**
- * Một lượt chat. Có thể là tin nhắn mới (message) và/hoặc quyết định cho các thao tác ghi
- * đang chờ (decisions). Phát sự kiện để route stream về trình duyệt.
+ * Một lượt chat trên cuộc trò chuyện đã có (người gọi đã kiểm tra quyền sở hữu).
+ * Có thể là tin nhắn mới (message) và/hoặc quyết định cho các thao tác ghi đang chờ (decisions).
+ * Chạy nền qua lib/chat/runs.ts — không phụ thuộc kết nối của trình duyệt.
  */
 export async function* runChat(opts: {
   user: { id: string; name: string | null; email: string };
-  conversationId?: string | null;
+  conversationId: string;
   message?: string | null;
   decisions?: Record<string, ChatDecision>;
   signal: AbortSignal;
 }): AsyncGenerator<ChatStreamEvent> {
-  const { user, signal } = opts;
+  const { user, signal, conversationId } = opts;
   const message = opts.message?.trim() || null;
-
-  let conv = opts.conversationId ? await getConversation(user.id, opts.conversationId) : null;
-  if (opts.conversationId && !conv) {
-    yield { type: "error", message: "Không tìm thấy cuộc trò chuyện" };
-    return;
-  }
-  if (!conv) {
-    if (!message) {
-      yield { type: "error", message: "Tin nhắn trống" };
-      return;
-    }
-    [conv] = await db
-      .insert(chatConversations)
-      .values({ userId: user.id, title: titleFrom(message) })
-      .returning();
-    yield { type: "conversation", id: conv.id, title: conv.title };
-  }
-  const conversationId = conv.id;
 
   const toolset = await openToolset(user.id);
   try {

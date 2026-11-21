@@ -181,6 +181,7 @@ Trang **Trợ lý** (`/chat`) và nút nổi ở góc màn hình mở khung chat
 
 - Tool **đọc** chạy ngay. Tool **ghi** hiện thẻ *Xác nhận / Bỏ qua* (kèm tên mặt hàng và tham số); chỉ chạy khi bấm Xác nhận. Lịch sử nhập / xuất ghi nguồn `agent: Trợ lý chat`.
 - Lịch sử chat lưu trong DB theo tài khoản (bảng `chat_conversations`, `chat_messages`).
+- Câu trả lời **chạy nền trên server**, không phụ thuộc kết nối trình duyệt: chuyển trang, đóng khung chat, khoá màn hình điện thoại hay mở trên thiết bị khác đều xem tiếp được (client tự nối lại qua `GET /api/chat/conversations/[id]/stream`). Chỉ dừng khi bấm nút Dừng (`POST /api/chat/stop`) hoặc sau 10 phút.
 - Cần server có API kiểu OpenAI hỗ trợ **gọi tool** (function calling), ví dụ `llama-server --jinja` với Qwen 2.5 / Qwen 3. Khối `<think>` của model suy luận được ẩn đi.
 
 Cấu hình (bỏ trống `LLM_BASE_URL` = tắt trợ lý, ẩn nút nổi):

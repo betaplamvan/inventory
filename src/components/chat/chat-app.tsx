@@ -5,6 +5,7 @@ import { History, MessageSquarePlus, Trash2, X } from "lucide-react";
 import type { ConversationSummary } from "@/lib/chat/types";
 import { fmtDateTime } from "@/lib/format";
 import { ChatPanel } from "./chat-panel";
+import { forget, newDraftKey, writeLast } from "./store";
 
 /** Đổi ?c= trên thanh địa chỉ mà không điều hướng (giữ nguyên trạng thái đang stream) */
 function syncUrl(id: string | null) {
@@ -15,9 +16,9 @@ function syncUrl(id: string | null) {
 }
 
 export function ChatApp({ initialId }: { initialId: string | null }) {
-  const [activeId, setActiveId] = useState<string | null>(initialId);
-  /** Đổi key → ChatPanel mount lại với cuộc trò chuyện khác (cuộc vừa tạo thì giữ key) */
-  const [panelKey, setPanelKey] = useState(initialId ?? "new-0");
+  /** id cuộc trò chuyện đang mở, hoặc khoá nháp "new:…" cho cuộc mới */
+  const [activeKey, setActiveKey] = useState<string>(() => initialId ?? newDraftKey());
+  const activeId = activeKey.startsWith("new:") ? null : activeKey;
   const [list, setList] = useState<ConversationSummary[] | null>(null);
   const [drawer, setDrawer] = useState(false);
 
@@ -31,25 +32,36 @@ export function ChatApp({ initialId }: { initialId: string | null }) {
       .then((res) => (res.ok ? (res.json() as Promise<{ conversations: ConversationSummary[] }>) : null))
       .then((data) => data && setList(data.conversations))
       .catch(() => {});
-  }, []);
+    // Store báo có hoạt động (tạo cuộc mới, trả lời xong) → cập nhật thứ tự danh sách
+    const onActivity = () => void refresh();
+    window.addEventListener("kho:chat-activity", onActivity);
+    return () => window.removeEventListener("kho:chat-activity", onActivity);
+  }, [refresh]);
+
+  // Khung chat nổi ở trang khác mở lại đúng cuộc đang xem
+  useEffect(() => {
+    if (initialId) writeLast(initialId);
+  }, [initialId]);
 
   const open = (id: string | null) => {
-    setActiveId(id);
-    setPanelKey(id ?? `new-${Date.now()}`);
+    setActiveKey(id ?? newDraftKey());
     syncUrl(id);
+    writeLast(id);
     setDrawer(false);
   };
 
   const remove = async (c: ConversationSummary) => {
     if (!confirm(`Xoá cuộc trò chuyện "${c.title}"?`)) return;
     await fetch(`/api/chat/conversations/${c.id}`, { method: "DELETE" });
+    forget(c.id);
     setList((l) => l?.filter((x) => x.id !== c.id) ?? null);
     if (activeId === c.id) open(null);
   };
 
   const onCreated = useCallback((id: string, title: string) => {
-    setActiveId(id);
+    setActiveKey(id);
     syncUrl(id);
+    writeLast(id);
     setList((l) => [{ id, title, updatedAt: new Date().toISOString() }, ...(l ?? [])]);
   }, []);
 
@@ -117,7 +129,7 @@ export function ChatApp({ initialId }: { initialId: string | null }) {
           </button>
         </header>
         <div className="min-h-0 flex-1">
-          <ChatPanel key={panelKey} initialId={activeId} onCreated={onCreated} onActivity={refresh} />
+          <ChatPanel conversationKey={activeKey} onCreated={onCreated} onNotFound={() => open(null)} />
         </div>
       </section>
 

@@ -5,22 +5,7 @@ import { usePathname } from "next/navigation";
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { Bot, Maximize2, MessageSquarePlus, X } from "lucide-react";
 import { ChatPanel } from "./chat-panel";
-
-const LAST_KEY = "inv-chat-last";
-
-function readLast() {
-  try {
-    return localStorage.getItem(LAST_KEY);
-  } catch {
-    return null;
-  }
-}
-function writeLast(id: string | null) {
-  try {
-    if (id) localStorage.setItem(LAST_KEY, id);
-    else localStorage.removeItem(LAST_KEY);
-  } catch {}
-}
+import { isDraft, newDraftKey, readLast, writeLast } from "./store";
 
 /** Nút nổi mở nhanh trợ lý ở mọi trang (ẩn ở trang /chat). usePathname cần Suspense. */
 export function ChatLauncher() {
@@ -34,18 +19,15 @@ export function ChatLauncher() {
 function Launcher() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
-  /** Giữ panel trong DOM sau lần mở đầu → đóng lại không làm mất câu trả lời đang chạy */
   const [mounted, setMounted] = useState(false);
-  const [conversationId, setConversationId] = useState<string | null>(null);
-  /** Đổi key → ChatPanel mount lại (cuộc mới / cuộc khác); cuộc vừa tạo trong panel thì giữ key */
-  const [panelKey, setPanelKey] = useState("new-0");
+  /** id cuộc trò chuyện, hoặc khoá nháp "new:…" cho cuộc mới (trạng thái thật nằm trong ./store) */
+  const [conversationKey, setConversationKey] = useState<string>(() => newDraftKey());
+  const conversationId = isDraft(conversationKey) ? null : conversationKey;
 
   const show = () => {
-    if (!mounted) {
-      const last = readLast();
-      setConversationId(last);
-      setPanelKey(last ?? "new-0");
-    }
+    // Mở lại đúng cuộc gần nhất (có thể vừa đổi ở trang /chat); cuộc mới chưa gửi thì giữ nguyên
+    const last = readLast();
+    if (last && last !== conversationKey) setConversationKey(last);
     setMounted(true);
     setOpen(true);
   };
@@ -66,15 +48,14 @@ function Launcher() {
   }, [open]);
 
   const onCreated = useCallback((id: string) => {
-    setConversationId(id);
+    setConversationKey(id);
     writeLast(id);
   }, []);
 
   if (pathname?.startsWith("/chat")) return null;
 
   const startNew = () => {
-    setConversationId(null);
-    setPanelKey(`new-${Date.now()}`);
+    setConversationKey(newDraftKey());
     writeLast(null);
   };
 
@@ -132,7 +113,7 @@ function Launcher() {
             </button>
           </header>
           <div className="min-h-0 flex-1">
-            <ChatPanel key={panelKey} initialId={conversationId} onCreated={onCreated} onNotFound={startNew} compact />
+            <ChatPanel conversationKey={conversationKey} onCreated={onCreated} onNotFound={startNew} compact />
           </div>
         </div>
       )}

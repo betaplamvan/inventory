@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
 import {
   ArrowUp,
   Bot,
@@ -14,8 +14,9 @@ import {
   Wrench,
   X,
 } from "lucide-react";
-import type { ChatDecision, ChatStreamEvent, UiMessage, UiPart, UiToolCall, UiToolStatus } from "@/lib/chat/types";
+import type { ChatDecision, UiToolCall, UiToolStatus } from "@/lib/chat/types";
 import { ChatMarkdown } from "./markdown";
+import { decide, isDraft, openConversation, sendMessage, stop, useChatState } from "./store";
 
 const SUGGESTIONS = [
   "Mặt hàng nào sắp hết cần mua thêm?",
@@ -25,96 +26,39 @@ const SUGGESTIONS = [
 ];
 
 /**
- * Khung chat cho 1 cuộc trò chuyện. Đổi sang cuộc khác thì parent đổi `key` để mount lại;
- * cuộc mới do chính panel tạo (gửi tin đầu tiên) thì giữ nguyên panel, báo lên qua onCreated.
+ * Khung chat cho 1 cuộc trò chuyện. Trạng thái và kết nối stream nằm trong store dùng chung (./store),
+ * nên panel unmount (chuyển trang, đóng khung nổi) KHÔNG làm dừng câu trả lời đang chạy;
+ * panel khác mở cùng cuộc trò chuyện thấy tiếp tục ngay.
  */
 type Props = {
-  initialId: string | null;
+  /** id cuộc trò chuyện, hoặc khoá nháp "new:…" (newDraftKey) cho cuộc mới */
+  conversationKey: string;
   /** Cuộc trò chuyện mới vừa được tạo (khi gửi tin đầu tiên) */
   onCreated?: (id: string, title: string) => void;
-  /** Có hoạt động mới (để danh sách cuộc trò chuyện cập nhật thứ tự) */
-  onActivity?: () => void;
   /** Cuộc trò chuyện không còn (đã xoá) */
   onNotFound?: () => void;
   compact?: boolean;
 };
 
-let tempId = 0;
-const nextTemp = () => `tmp-${++tempId}`;
-
-/* ---------------- Cập nhật danh sách tin nhắn (bất biến) ---------------- */
-
-function withAssistant(msgs: UiMessage[], fn: (parts: UiPart[]) => UiPart[]): UiMessage[] {
-  const last = msgs.at(-1);
-  if (last?.role === "assistant") return [...msgs.slice(0, -1), { ...last, parts: fn(last.parts) }];
-  return [...msgs, { id: nextTemp(), role: "assistant", parts: fn([]) }];
-}
-
-function appendText(parts: UiPart[], delta: string): UiPart[] {
-  const last = parts.at(-1);
-  if (last?.type === "text") return [...parts.slice(0, -1), { type: "text", text: last.text + delta }];
-  return [...parts, { type: "text", text: delta }];
-}
-
-function updateCall(msgs: UiMessage[], id: string, patch: Partial<UiToolCall>): UiMessage[] {
-  return msgs.map((m) =>
-    m.parts.some((p) => p.type === "tool" && p.call.id === id)
-      ? {
-          ...m,
-          parts: m.parts.map((p) =>
-            p.type === "tool" && p.call.id === id ? { ...p, call: { ...p.call, ...patch } } : p,
-          ),
-        }
-      : m,
-  );
-}
-
-const awaitingCalls = (msgs: UiMessage[]) =>
-  msgs.flatMap((m) => m.parts.flatMap((p) => (p.type === "tool" && p.call.status === "awaiting" ? [p.call] : [])));
-
-/* ---------------- Component ---------------- */
-
-export function ChatPanel({ initialId, onCreated, onActivity, onNotFound, compact }: Props) {
-  const [messages, setMessages] = useState<UiMessage[]>([]);
-  const [loading, setLoading] = useState(!!initialId);
-  const [streaming, setStreaming] = useState(false);
-  const [thinking, setThinking] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+export function ChatPanel({ conversationKey, onCreated, onNotFound, compact }: Props) {
+  const { messages, status, thinking, error } = useChatState(conversationKey);
+  const streaming = status === "streaming";
+  const loading = status === "loading";
   const [input, setInput] = useState("");
-  const [decisions, setDecisions] = useState<Record<string, ChatDecision>>({});
 
-  const convRef = useRef<string | null>(initialId);
-  const abortRef = useRef<AbortController | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const stickRef = useRef(true);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const handleNotFound = useEffectEvent(() => onNotFound?.());
 
-  // Mount với cuộc trò chuyện có sẵn → tải tin nhắn; unmount → dừng stream đang chạy
+  // Mở cuộc trò chuyện: tải lịch sử, hoặc nối vào lượt trả lời đang chạy nền
   useEffect(() => {
-    const ctrl = new AbortController();
-    if (initialId) {
-      fetch(`/api/chat/conversations/${initialId}`, { signal: ctrl.signal })
-        .then(async (res) => {
-          if (res.status === 404 && onNotFound) {
-            setMessages([]);
-            onNotFound();
-            return;
-          }
-          if (!res.ok) throw new Error((await res.json().catch(() => null))?.error ?? "Không tải được cuộc trò chuyện");
-          const data = (await res.json()) as { messages: UiMessage[] };
-          setMessages(data.messages);
-        })
-        .catch((err: Error) => {
-          if (err.name !== "AbortError") setError(err.message);
-        })
-        .finally(() => setLoading(false));
-    }
-    return () => {
-      ctrl.abort();
-      abortRef.current?.abort();
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- chỉ chạy khi mount (mỗi cuộc trò chuyện 1 lần mount)
-  }, []);
+    if (isDraft(conversationKey)) return;
+    stickRef.current = true;
+    void openConversation(conversationKey).then((r) => {
+      if (r === "notfound") handleNotFound();
+    });
+  }, [conversationKey]);
 
   // Tự cuộn xuống khi có nội dung mới, trừ khi người dùng đã cuộn lên đọc
   useEffect(() => {
@@ -127,115 +71,16 @@ export function ChatPanel({ initialId, onCreated, onActivity, onNotFound, compac
     if (el) stickRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
   };
 
-  const run = useCallback(
-    async (body: { message?: string; decisions?: Record<string, ChatDecision> }) => {
-      const ctrl = new AbortController();
-      abortRef.current = ctrl;
-      setStreaming(true);
-      setThinking(false);
-      setError(null);
-      stickRef.current = true;
-      try {
-        const res = await fetch("/api/chat", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ conversationId: convRef.current, ...body }),
-          signal: ctrl.signal,
-        });
-        if (!res.ok || !res.body) {
-          throw new Error((await res.json().catch(() => null))?.error ?? `Lỗi ${res.status}`);
-        }
-        const reader = res.body.getReader();
-        const decoder = new TextDecoder();
-        let buf = "";
-        for (;;) {
-          const { value, done } = await reader.read();
-          if (done) break;
-          buf += decoder.decode(value, { stream: true });
-          let sep: number;
-          while ((sep = buf.indexOf("\n\n")) >= 0) {
-            const chunk = buf.slice(0, sep);
-            buf = buf.slice(sep + 2);
-            const line = chunk.split("\n").find((l) => l.startsWith("data:"));
-            if (!line) continue;
-            handle(JSON.parse(line.slice(5)) as ChatStreamEvent);
-          }
-        }
-      } catch (err) {
-        if ((err as Error).name !== "AbortError") setError((err as Error).message || "Mất kết nối");
-      } finally {
-        setStreaming(false);
-        setThinking(false);
-        abortRef.current = null;
-        onActivity?.();
-      }
-
-      function handle(ev: ChatStreamEvent) {
-        switch (ev.type) {
-          case "conversation":
-            convRef.current = ev.id;
-            onCreated?.(ev.id, ev.title);
-            break;
-          case "user":
-            // Thay id tạm của tin nhắn vừa gửi bằng id thật
-            setMessages((m) => {
-              const i = m.findLastIndex((x) => x.role === "user");
-              return i < 0 ? m : m.map((x, j) => (j === i ? { ...x, id: ev.message.id } : x));
-            });
-            break;
-          case "thinking":
-            setThinking(true);
-            break;
-          case "text":
-            setThinking(false);
-            setMessages((m) => withAssistant(m, (p) => appendText(p, ev.delta)));
-            break;
-          case "tool_call":
-            setThinking(false);
-            setMessages((m) => withAssistant(m, (p) => [...p, { type: "tool", call: ev.call }]));
-            break;
-          case "tool_result":
-            setMessages((m) => updateCall(m, ev.id, { status: ev.status, result: ev.result }));
-            break;
-          case "error":
-            setError(ev.message);
-            break;
-          case "done":
-            break;
-        }
-      }
-    },
-    [onActivity, onCreated],
-  );
-
   const send = (text: string) => {
-    const t = text.trim();
-    if (!t || streaming) return;
+    if (!text.trim() || streaming) return;
     setInput("");
-    setDecisions({});
-    // Gửi tin mới khi còn thao tác chờ xác nhận → server tự bỏ qua các thao tác đó
-    setMessages((m) => [
-      ...awaitingCalls(m).reduce((acc, c) => updateCall(acc, c.id, { status: "rejected", result: "Đã bỏ qua" }), m),
-      { id: nextTemp(), role: "user", parts: [{ type: "text", text: t }] },
-    ]);
-    void run({ message: t });
+    stickRef.current = true;
+    sendMessage(conversationKey, text, onCreated);
   };
 
-  const decide = (call: UiToolCall, decision: ChatDecision) => {
-    if (streaming) return;
-    const next = { ...decisions, [call.id]: decision };
-    const pending = awaitingCalls(messages);
-    setMessages((m) =>
-      updateCall(m, call.id, {
-        status: decision === "approve" ? "running" : "rejected",
-      }),
-    );
-    if (pending.every((c) => next[c.id])) {
-      setDecisions({});
-      void run({ decisions: next });
-    } else {
-      setDecisions(next);
-    }
+  const onDecide = (call: UiToolCall, decision: ChatDecision) => {
+    stickRef.current = true;
+    decide(conversationKey, call, decision);
   };
 
   const empty = !loading && messages.length === 0;
@@ -304,7 +149,7 @@ export function ChatPanel({ initialId, onCreated, onActivity, onNotFound, compac
                         key={p.call.id}
                         call={p.call}
                         disabled={streaming}
-                        onDecide={(d) => decide(p.call, d)}
+                        onDecide={(d) => onDecide(p.call, d)}
                       />
                     ) : (
                       <ToolChip key={p.call.id} call={p.call} />
@@ -364,7 +209,7 @@ export function ChatPanel({ initialId, onCreated, onActivity, onNotFound, compac
             <button
               type="button"
               className="btn-secondary size-10 shrink-0 p-0"
-              onClick={() => abortRef.current?.abort()}
+              onClick={() => stop(conversationKey)}
               aria-label="Dừng"
               title="Dừng"
             >

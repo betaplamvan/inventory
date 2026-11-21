@@ -181,7 +181,15 @@ export function buildMcpServer(auth: McpAuth) {
       try {
         // via: lịch sử nhập/xuất ghi rõ thao tác do agent nào (tên token / kết nối OAuth) thực hiện
         const result = await runAsUser(auth.userId, () => fn(args), { source: "agent", name: auth.tokenName });
-        if (write) revalidatePath("/", "layout");
+        if (write) {
+          // Làm mới cache trang: cố gắng hết sức — dữ liệu đã ghi xong, không được báo lỗi vì bước này
+          // (vd. trợ lý chat chạy nền sau khi trình duyệt đã ngắt kết nối)
+          try {
+            revalidatePath("/", "layout");
+          } catch (err) {
+            console.warn("[mcp] revalidatePath bỏ qua:", (err as Error).message);
+          }
+        }
         return result;
       } catch (err) {
         return fail(pgErrorMessage(err));

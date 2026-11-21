@@ -34,6 +34,8 @@ export type ChatDecision = "approve" | "reject";
 
 /** Sự kiện stream (SSE) của POST /api/chat */
 export type ChatStreamEvent =
+  /** Nối vào lượt đang chạy: trạng thái trước lượt này, các sự kiện sau đó được phát lại từ đầu lượt */
+  | { type: "snapshot"; messages: UiMessage[] }
   | { type: "conversation"; id: string; title: string }
   | { type: "user"; message: UiMessage }
   | { type: "thinking" }
