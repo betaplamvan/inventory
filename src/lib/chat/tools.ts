@@ -5,7 +5,7 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { ChatToolStatus, Domain } from "@/db/schema";
 import { buildMcpServer } from "@/lib/mcp/server";
 import type { LlmTool } from "./llm";
-import { WebError, readWebpage, webSearch, webSearchConfigured } from "./web";
+import { WebError, imageSearch, readWebpage, webSearch, webSearchConfigured } from "./web";
 
 /**
  * Bộ tool của trợ lý chat = chính các tool MCP (lib/mcp/server.ts), chạy trong cùng tiến trình
@@ -41,6 +41,25 @@ const WEB_TOOLS: (LlmTool & { title: string })[] = [
           query: { type: "string", description: "Từ khoá tìm kiếm (tiếng Việt hoặc tiếng Anh, tiếng Anh thường tốt hơn cho kỹ thuật)" },
           language: { type: "string", description: 'Ngôn ngữ kết quả: "vi", "en" hoặc "auto" (mặc định)' },
           limit: { type: "integer", minimum: 1, maximum: 10, description: "Số kết quả, mặc định 6" },
+        },
+        required: ["query"],
+      },
+    },
+  },
+  {
+    type: "function",
+    title: "Tìm ảnh trên web",
+    function: {
+      name: "image_search",
+      description:
+        "Tìm HÌNH ẢNH trên internet (linh kiện, sơ đồ mạch, kiểu quần áo / bộ phối, món ăn…). Trả về sẵn markdown ảnh " +
+        "(thumbnail) kèm trang nguồn — chèn nguyên văn 2–4 ảnh phù hợp nhất vào câu trả lời. Ảnh của món ĐANG CÓ trong kho " +
+        "thì dùng get_item_images thay vì tool này.",
+      parameters: {
+        type: "object",
+        properties: {
+          query: { type: "string", description: "Từ khoá tìm ảnh, vd. 'tụ gốm 100nF 104', 'phối blazer xám quần jean'" },
+          limit: { type: "integer", minimum: 1, maximum: 8, description: "Số ảnh, mặc định 4" },
         },
         required: ["query"],
       },
@@ -128,7 +147,7 @@ export async function openToolset(userId: string, defaultDomain?: Domain): Promi
     ],
     async call(name, args) {
       if (!meta.has(name)) return { status: "error", text: `Không có tool "${name}"` };
-      if (name === "web_search" || name === "read_webpage") {
+      if (name === "web_search" || name === "read_webpage" || name === "image_search") {
         if (++webCalls > MAX_WEB_CALLS) {
           return { status: "error", text: `Đã tra web ${MAX_WEB_CALLS} lần trong lượt này — hãy trả lời với thông tin đã có.` };
         }
@@ -171,6 +190,25 @@ async function callWeb(name: string, args: Record<string, unknown>): Promise<{ s
         (r, i) => `${i + 1}. ${r.title || r.url}\n   ${r.url}${r.snippet ? `\n   ${r.snippet}` : ""}`,
       );
       return { status: "ok", text: `${WEB_NOTE}\nKết quả tìm "${query}":\n${lines.join("\n")}` };
+    }
+    if (name === "image_search") {
+      const query = String(args.query ?? "").trim();
+      if (!query) return { status: "error", text: "Thiếu query" };
+      const limit = typeof args.limit === "number" ? Math.min(8, Math.max(1, args.limit)) : 4;
+      const images = await imageSearch(query, { limit });
+      if (!images.length) return { status: "ok", text: `Không tìm thấy ảnh cho "${query}"` };
+      const alt = (s: string) => s.replace(/[[\]\\]/g, " ").replace(/\s+/g, " ").trim() || query;
+      const lines = images.map(
+        (im, i) =>
+          `${i + 1}. ${im.title || "(không tiêu đề)"} — nguồn ${im.source || "?"}\n` +
+          `   markdown: ![${alt(im.title)}](${im.thumbnail})\n   trang: ${im.page}`,
+      );
+      return {
+        status: "ok",
+        text:
+          `${WEB_NOTE}\nẢnh cho "${query}" — chèn nguyên văn dòng markdown của 2–4 ảnh phù hợp, kèm link trang nguồn:\n` +
+          lines.join("\n"),
+      };
     }
     const page = await readWebpage(String(args.url ?? ""));
     return {

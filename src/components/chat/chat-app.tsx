@@ -24,12 +24,12 @@ export function ChatApp({ initialId, domain }: { initialId: string | null; domai
   const [drawer, setDrawer] = useState(false);
 
   const refresh = useCallback(async () => {
-    const res = await fetch("/api/chat/conversations").catch(() => null);
+    const res = await fetch(`/api/chat/conversations?domain=${domain}`).catch(() => null);
     if (res?.ok) setList(((await res.json()) as { conversations: ConversationSummary[] }).conversations);
-  }, []);
+  }, [domain]);
 
   useEffect(() => {
-    fetch("/api/chat/conversations")
+    fetch(`/api/chat/conversations?domain=${domain}`)
       .then((res) => (res.ok ? (res.json() as Promise<{ conversations: ConversationSummary[] }>) : null))
       .then((data) => data && setList(data.conversations))
       .catch(() => {});
@@ -37,7 +37,7 @@ export function ChatApp({ initialId, domain }: { initialId: string | null; domai
     const onActivity = () => void refresh();
     window.addEventListener("kho:chat-activity", onActivity);
     return () => window.removeEventListener("kho:chat-activity", onActivity);
-  }, [refresh]);
+  }, [domain, refresh]);
 
   // Khung chat nổi ở trang khác mở lại đúng cuộc đang xem
   useEffect(() => {

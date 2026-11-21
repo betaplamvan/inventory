@@ -26,10 +26,25 @@ const components: Components = {
       </a>
     );
   },
-  // Chỉ hiện ảnh của chính app (ảnh mặt hàng): model không thể chèn ảnh từ nơi khác (theo dõi / lừa đảo)
+  // Ảnh của app (ảnh mặt hàng) hiện thẳng; ảnh từ web đi qua proxy /api/web-image (chặn mạng nội bộ, chỉ nhận
+  // file ảnh, trình duyệt không gọi thẳng site lạ → không lộ IP người xem); kiểu link khác thì không hiện.
   img({ src, alt }) {
-    const path = typeof src === "string" ? internalPath(src) : null;
-    if (!path) return <span className="text-muted">[{alt || "ảnh"}]</span>;
+    const raw = typeof src === "string" ? src : "";
+    const path = internalPath(raw);
+    if (!path) {
+      if (!/^https?:\/\//i.test(raw)) return <span className="text-muted">[{alt || "ảnh"}]</span>;
+      return (
+        <a href={raw} target="_blank" rel="noopener noreferrer nofollow" title={alt || undefined}>
+          {/* eslint-disable-next-line @next/next/no-img-element -- ảnh web qua proxy, kích thước không cố định */}
+          <img
+            src={`/api/web-image?u=${encodeURIComponent(raw)}`}
+            alt={alt ?? ""}
+            loading="lazy"
+            referrerPolicy="no-referrer"
+          />
+        </a>
+      );
+    }
     return (
       <a href={path.replace(/([?&])thumb=1(&|$)/, "$1").replace(/[?&]$/, "")} target="_blank" rel="noopener noreferrer">
         {/* eslint-disable-next-line @next/next/no-img-element -- ảnh động từ /api/media, kích thước không cố định */}

@@ -104,6 +104,7 @@ function Launcher({ domain }: { domain: Domain }) {
             </button>
             <Link
               href={conversationId ? `/chat?c=${conversationId}` : "/chat"}
+              prefetch={false}
               className="btn-ghost btn-sm"
               aria-label="Mở trang trợ lý"
               title="Mở trang đầy đủ"

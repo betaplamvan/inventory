@@ -5,6 +5,9 @@ import { ChatApp } from "@/components/chat/chat-app";
 import { Skeleton } from "@/components/ui";
 import { llmConfigured } from "@/lib/chat/llm";
 import { currentDomain } from "@/lib/domain-server";
+import { DomainSync } from "@/components/domain";
+import { getConversation } from "@/lib/chat/agent";
+import { requireUser } from "@/lib/auth/session";
 
 export const metadata = { title: "Trợ lý" };
 
@@ -34,7 +37,16 @@ async function Chat({ searchParams }: { searchParams: PageProps<"/chat">["search
   }
   const sp = await searchParams;
   const c = typeof sp.c === "string" && /^[0-9a-f-]{36}$/i.test(sp.c) ? sp.c : null;
-  const domain = await currentDomain();
+  // Mở 1 cuộc trò chuyện cụ thể (vd. bấm phóng to từ khung chat nổi) → dùng KHO CỦA CUỘC ĐÓ và đồng bộ giao diện
+  // sang kho đó, thay vì cookie (có thể lệch nếu trang được trình duyệt cache từ lúc ở kho khác)
+  const me = await requireUser();
+  const conv = c ? await getConversation(me.id, c) : null;
+  const domain = conv?.domain ?? (await currentDomain());
   // key: đổi kho → danh sách cuộc trò chuyện và khung chat của kho mới
-  return <ChatApp key={domain} initialId={c} domain={domain} />;
+  return (
+    <>
+      <DomainSync domain={domain} />
+      <ChatApp key={domain} initialId={conv ? conv.id : null} domain={domain} />
+    </>
+  );
 }

@@ -295,6 +295,9 @@ textarea {
 .chat-md img {
   display: inline-block;
   max-height: 14rem;
+  max-width: min(100%, 16rem);
+  margin: 0.15rem 0.35rem 0.15rem 0;
+  background: var(--surface-2);
   border-radius: 0.5rem;
   border: 1px solid var(--border);
 }

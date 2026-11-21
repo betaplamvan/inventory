@@ -76,7 +76,9 @@ function ActiveSwitcher({ compact }: { compact: boolean }) {
     applyDomain(d);
     // Trang gắn với 1 mặt hàng / 1 cuộc trò chuyện của kho cũ → về danh sách của kho mới
     if (/^\/items\/\d+/.test(pathname)) router.push("/items");
-    else if (pathname.startsWith("/chat")) router.push("/chat");
+    // Trang Trợ lý giữ nhiều trạng thái phía client (danh sách, cuộc đang mở) → tải lại hẳn cho chắc
+    // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- cố ý tải lại toàn trang
+    else if (pathname.startsWith("/chat")) window.location.assign("/chat");
     else router.refresh();
   };
   return <SwitcherView compact={compact} current={current} onPick={onPick} />;

@@ -56,6 +56,46 @@ export async function webSearch(query: string, opts: { language?: string; limit?
   return out;
 }
 
+export type ImageResult = { title: string; thumbnail: string; image: string; page: string; source: string };
+
+/** Tìm ảnh qua SearXNG (categories=images): thumbnail nhỏ để hiện trong chat, kèm link ảnh gốc và trang nguồn */
+export async function imageSearch(query: string, opts: { limit?: number } = {}) {
+  const base = (process.env.SEARCH_URL || "").replace(/\/+$/, "");
+  if (!base) throw new WebError("Chưa cấu hình SEARCH_URL");
+  const u = new URL(`${base}/search`);
+  u.searchParams.set("q", query);
+  u.searchParams.set("format", "json");
+  u.searchParams.set("categories", "images");
+  let res: Response;
+  try {
+    res = await fetch(u, {
+      headers: { Accept: "application/json", "X-Real-IP": "127.0.0.1" },
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    });
+  } catch (err) {
+    throw new WebError(`Không kết nối được máy tìm kiếm: ${(err as Error).message}`);
+  }
+  if (!res.ok) throw new WebError(`Máy tìm kiếm trả lỗi HTTP ${res.status}`);
+  const data = (await res.json()) as {
+    results?: { title?: string; url?: string; img_src?: string; thumbnail_src?: string }[];
+  };
+  const seen = new Set<string>();
+  const out: ImageResult[] = [];
+  for (const r of data.results ?? []) {
+    const image = r.img_src?.startsWith("http") ? r.img_src : "";
+    const thumbnail = r.thumbnail_src?.startsWith("http") ? r.thumbnail_src : image;
+    if (!thumbnail || seen.has(image || thumbnail)) continue;
+    seen.add(image || thumbnail);
+    let source = "";
+    try {
+      source = new URL(r.url ?? "").hostname.replace(/^www\./, "");
+    } catch {}
+    out.push({ title: (r.title ?? "").replace(/\s+/g, " ").trim().slice(0, 120), thumbnail, image, page: r.url ?? "", source });
+    if (out.length >= (opts.limit ?? 6)) break;
+  }
+  return out;
+}
+
 /* ------------------------------------------------------------------ */
 /* Đọc trang — chặn địa chỉ nội bộ                                     */
 /* ------------------------------------------------------------------ */
@@ -116,9 +156,10 @@ const safeLookup: net.LookupFunction = (hostname, options, callback) => {
   });
 };
 
-type Fetched = { url: string; contentType: string; body: Buffer };
+type Fetched = { url: string; contentType: string; body: Buffer; truncated: boolean };
+type GetOpts = { maxBytes: number; accept: string };
 
-function getOnce(url: URL): Promise<Fetched | { redirect: string }> {
+function getOnce(url: URL, opts: GetOpts): Promise<Fetched | { redirect: string }> {
   return new Promise((resolve, reject) => {
     if (net.isIP(url.hostname.replace(/^\[|\]$/g, "")) && isPrivateIp(url.hostname.replace(/^\[|\]$/g, ""))) {
       return reject(new WebError("Không được truy cập địa chỉ nội bộ"));
@@ -131,7 +172,7 @@ function getOnce(url: URL): Promise<Fetched | { redirect: string }> {
         timeout: TIMEOUT_MS,
         headers: {
           "User-Agent": UA,
-          Accept: "text/html,application/xhtml+xml,text/plain;q=0.9,*/*;q=0.5",
+          Accept: opts.accept,
           "Accept-Language": "vi,en;q=0.8",
         },
       },
@@ -147,18 +188,23 @@ function getOnce(url: URL): Promise<Fetched | { redirect: string }> {
         }
         const chunks: Buffer[] = [];
         let size = 0;
+        const done = (truncated: boolean) =>
+          resolve({
+            url: url.toString(),
+            contentType: String(res.headers["content-type"] ?? ""),
+            body: Buffer.concat(chunks),
+            truncated,
+          });
         res.on("data", (c: Buffer) => {
           size += c.length;
-          if (size > MAX_BYTES) {
+          if (size > opts.maxBytes) {
             res.destroy();
-            resolve({ url: url.toString(), contentType: String(res.headers["content-type"] ?? ""), body: Buffer.concat(chunks) });
+            done(true);
             return;
           }
           chunks.push(c);
         });
-        res.on("end", () =>
-          resolve({ url: url.toString(), contentType: String(res.headers["content-type"] ?? ""), body: Buffer.concat(chunks) }),
-        );
+        res.on("end", () => done(false));
         res.on("error", reject);
       },
     );
@@ -167,7 +213,12 @@ function getOnce(url: URL): Promise<Fetched | { redirect: string }> {
   });
 }
 
-async function safeGet(raw: string): Promise<Fetched> {
+const PAGE_OPTS: GetOpts = {
+  maxBytes: MAX_BYTES,
+  accept: "text/html,application/xhtml+xml,text/plain;q=0.9,*/*;q=0.5",
+};
+
+async function safeGet(raw: string, opts: GetOpts = PAGE_OPTS): Promise<Fetched> {
   let url: URL;
   try {
     url = new URL(raw);
@@ -177,7 +228,7 @@ async function safeGet(raw: string): Promise<Fetched> {
   for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
     if (url.protocol !== "http:" && url.protocol !== "https:") throw new WebError("Chỉ đọc được link http / https");
     if (url.username || url.password) throw new WebError("Không hỗ trợ URL có tài khoản");
-    const r = await getOnce(url);
+    const r = await getOnce(url, opts);
     if ("redirect" in r) {
       url = new URL(r.redirect);
       continue;
@@ -239,6 +290,19 @@ function decodeBody(body: Buffer, contentType: string) {
   } catch {
     return new TextDecoder("utf-8").decode(body);
   }
+}
+
+/** Ảnh được phép qua proxy — KHÔNG có SVG (có thể chứa script, chạy dưới origin của app) */
+const IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif", "image/avif", "image/bmp"]);
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+
+/** Tải ảnh từ web cho proxy /api/web-image (cùng lớp chặn địa chỉ nội bộ như read_webpage) */
+export async function fetchWebImage(url: string) {
+  const r = await safeGet(url, { maxBytes: MAX_IMAGE_BYTES, accept: "image/avif,image/webp,image/*;q=0.8" });
+  if (r.truncated) throw new WebError("Ảnh quá lớn");
+  const type = r.contentType.split(";")[0].trim().toLowerCase();
+  if (!IMAGE_TYPES.has(type)) throw new WebError(`Không phải ảnh hợp lệ (${type || "không rõ"})`);
+  return { contentType: type, body: r.body };
 }
 
 /** Đọc một trang: trả tiêu đề + nội dung dạng chữ (cắt bớt). PDF / ảnh / file nhị phân → báo không đọc được. */
