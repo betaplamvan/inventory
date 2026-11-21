@@ -75,6 +75,7 @@ export function applyEvent<T extends ChatView>(s: T, ev: ChatStreamEvent): T {
     case "done":
       return { ...s, thinking: false };
     case "conversation":
+    case "title":
       return s;
   }
 }

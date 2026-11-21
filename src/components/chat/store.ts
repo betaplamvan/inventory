@@ -115,8 +115,13 @@ async function consume(key: string, res: Response, signal: AbortSignal, onCreate
           onCreated?.(ev.id, ev.title);
           notifyActivity();
         }
-        if (ev.type === "done") finished = true;
         update(curKey, (s) => applyEvent(s, ev));
+        // Trả lời xong → cho nhập tiếp ngay; stream có thể còn sự kiện phụ (tiêu đề tự đặt) theo sau
+        if (ev.type === "done") {
+          finished = true;
+          update(curKey, (s) => ({ ...s, status: "idle", thinking: false }));
+        }
+        if (ev.type === "title") notifyActivity();
       }
     }
   } catch (err) {
@@ -156,8 +161,12 @@ async function follow(key: string, open: (signal: AbortSignal) => Promise<Respon
       console.warn("[chat] mất kết nối stream:", (err as Error).message);
     }
   } finally {
-    if (readers.get(id) === ctrl) readers.delete(id);
-    update(id, (s) => ({ ...s, status: s.status === "streaming" ? "idle" : s.status, thinking: false }));
+    // Chỉ đụng trạng thái nếu stream này vẫn là stream hiện tại của cuộc trò chuyện
+    // (người dùng có thể đã gửi tin mới khi lượt cũ đang đặt tiêu đề → đã có stream mới)
+    if (readers.get(id) === ctrl) {
+      readers.delete(id);
+      update(id, (s) => ({ ...s, status: s.status === "streaming" ? "idle" : s.status, thinking: false }));
+    }
     notifyActivity();
   }
   // Lượt chạy trên server vẫn tiếp tục → nối lại sau giây lát

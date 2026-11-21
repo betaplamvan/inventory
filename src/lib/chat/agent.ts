@@ -250,6 +250,35 @@ export function webIntent(text: string): "image" | "web" | null {
   return wantsImageSearch(text) ? "image" : wantsWebSearch(text) ? "web" : null;
 }
 
+/**
+ * Tự đặt tiêu đề ngắn cho cuộc trò chuyện từ câu hỏi đầu + câu trả lời đầu (gọi model ngắn, không kèm tool).
+ * Lỗi / kết quả rỗng → giữ tiêu đề cũ (câu hỏi đầu). Trả về tiêu đề mới hoặc null.
+ */
+export async function autoTitle(conversationId: string, signal: AbortSignal) {
+  const rows = await loadMessages(conversationId);
+  const question = rows.find((r) => r.role === "user")?.content?.trim();
+  const answer = rows.find((r) => r.role === "assistant" && r.content?.trim())?.content?.trim();
+  if (!question) return null;
+  const prompt =
+    `Câu hỏi: ${question.replace(/\s+/g, " ").slice(0, 500)}\n` +
+    (answer ? `Trả lời: ${answer.replace(/\s+/g, " ").slice(0, 800)}\n` : "") +
+    "\nĐặt TIÊU ĐỀ ngắn gọn (3–7 từ, tiếng Việt) nêu đúng chủ đề cuộc trò chuyện trên, như tên một ghi chú. " +
+    "Không dấu ngoặc kép, không dấu chấm cuối, không emoji. Chỉ trả về tiêu đề.";
+  let t = "";
+  for await (const ev of streamChat({ messages: [{ role: "user", content: prompt }], signal })) {
+    if (ev.type === "text") t += ev.delta;
+  }
+  t = (t.trim().split("\n")[0] ?? "")
+    .replace(/^(tiêu đề|title)\s*:\s*/i, "")
+    .replace(/^["'`*#\s-]+|["'`*\s.!]+$/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (t.length < 3) return null;
+  const title = t.length > 60 ? `${t.slice(0, 57)}…` : t;
+  await db.update(chatConversations).set({ title }).where(eq(chatConversations.id, conversationId));
+  return title;
+}
+
 /** Nhờ model viết 1 câu truy vấn tìm kiếm từ vài tin nhắn gần nhất (gọi ngắn, không kèm tool) */
 async function webQueryFor(
   history: ChatMessage[],

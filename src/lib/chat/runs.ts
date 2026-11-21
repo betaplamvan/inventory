@@ -1,6 +1,6 @@
 import "server-only";
 import { after } from "next/server";
-import { lastMessageId, runChat } from "./agent";
+import { autoTitle, lastMessageId, runChat } from "./agent";
 import type { ChatDecision, ChatStreamEvent, UiMessage } from "./types";
 
 /**
@@ -26,6 +26,8 @@ export type Run = {
   events: ChatStreamEvent[];
   listeners: Set<Listener>;
   done: boolean;
+  /** Đã trả lời xong (sự kiện "done"), chỉ còn việc phụ như đặt tiêu đề → không chặn tin nhắn tiếp theo */
+  answered: boolean;
   abort: AbortController;
 };
 
@@ -41,6 +43,7 @@ export function activeRun(conversationId: string, userId: string) {
 }
 
 function emit(run: Run, ev: ChatStreamEvent) {
+  if (ev.type === "done") run.answered = true;
   run.events.push(ev);
   for (const l of run.listeners) l.onEvent(ev);
 }
@@ -54,7 +57,11 @@ export async function startRun(opts: {
   decisions?: Record<string, ChatDecision>;
 }): Promise<Run> {
   const { conversationId, user } = opts;
-  if (activeRun(conversationId, user.id)) throw new RunBusyError("Trợ lý đang trả lời cuộc trò chuyện này");
+  const busy = () => {
+    const cur = activeRun(conversationId, user.id);
+    return !!cur && !cur.answered;
+  };
+  if (busy()) throw new RunBusyError("Trợ lý đang trả lời cuộc trò chuyện này");
 
   const run: Run = {
     conversationId,
@@ -63,10 +70,11 @@ export async function startRun(opts: {
     events: [],
     listeners: new Set(),
     done: false,
+    answered: false,
     abort: new AbortController(),
   };
   // Kiểm tra lại sau await: 2 request gần như cùng lúc
-  if (activeRun(conversationId, user.id)) throw new RunBusyError("Trợ lý đang trả lời cuộc trò chuyện này");
+  if (busy()) throw new RunBusyError("Trợ lý đang trả lời cuộc trò chuyện này");
   runs.set(conversationId, run);
   if (opts.created) emit(run, { type: "conversation", id: conversationId, title: opts.created.title });
 
@@ -83,6 +91,14 @@ export async function startRun(opts: {
       })) {
         if (ev.type === "done") finished = true;
         emit(run, ev);
+      }
+      // Cuộc trò chuyện mới: trả lời xong câu đầu → tự đặt tiêu đề (thay cho câu hỏi đầu)
+      if (opts.created && finished && !run.abort.signal.aborted) {
+        const title = await autoTitle(conversationId, run.abort.signal).catch((err) => {
+          console.warn("[chat] không đặt được tiêu đề:", (err as Error).message);
+          return null;
+        });
+        if (title) emit(run, { type: "title", id: conversationId, title });
       }
     } catch (err) {
       console.error("[chat] lượt chạy lỗi", err);

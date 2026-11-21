@@ -37,6 +37,8 @@ export type ChatStreamEvent =
   /** Nối vào lượt đang chạy: trạng thái trước lượt này, các sự kiện sau đó được phát lại từ đầu lượt */
   | { type: "snapshot"; messages: UiMessage[] }
   | { type: "conversation"; id: string; title: string }
+  /** Tiêu đề do trợ lý tự đặt sau câu trả lời đầu tiên */
+  | { type: "title"; id: string; title: string }
   | { type: "user"; message: UiMessage }
   | { type: "thinking" }
   | { type: "text"; delta: string }
